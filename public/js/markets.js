@@ -1,53 +1,54 @@
-// Markets tab: live index chart, a plain-English market read, and all index quotes.
-import { api, el, $, inr2, inr0, pct, tone, pts, themeColors, stdev, sma, fmtExpiry, daysTo, compact, vixMood } from './util.js';
+// Markets tab: index chart with indicators, a plain-English market read, news & sentiment, and all index quotes.
+import { api, el, $, inr2, inr0, pct, tone, pts, stdev, fmtExpiry, daysTo, compact, vixMood } from './util.js';
 import { term } from './glossary.js';
 import { S, on, cfg, quote, loadChain, analysisExpiry, loadExpiries } from './state.js';
 import { yearsTo, now } from './bs.js';
+import { StudyChart, indicatorMenu, loadPrefs, savePrefs } from './studies.js';
+import { alignTo, STUDIES } from './indicators.js';
+import * as news from './newsfeed.js';
 
-let root, chart, series = [], range = '1D', dailyCache = new Map(), lastDraw = 0, readBox, tableBox;
+let root, chart, range = '1D', dailyCache = new Map(), lastDraw = 0, readBox, tableBox, prefs, menu, drawSeq = 0;
+const cached = new Map(); // small time-limited cache for option history and events
+async function memo(key, ms, fn) { const h = cached.get(key); if (h && Date.now() - h.at < ms) return h.v; const v = await fn(); cached.set(key, { at: Date.now(), v }); return v; }
 
 export function init(sec) {
   root = sec;
+  prefs = loadPrefs();
   // Replay has daily prices only, so no intraday view.
   const ranges = S.meta.replay ? ['1M', '3M', '6M', '1Y'] : ['1D', '1M', '3M', '6M', '1Y'];
   if (S.meta.replay) range = '3M';
   const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Chart range' }, ranges.map((r) => el('button', { type: 'button', 'data-r': r, class: r === range ? 'on' : '', text: r, onclick: () => { range = r; seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.r === r)); draw(true); } })));
+  menu = indicatorMenu(prefs, () => draw(false));
   const head = el('div', { class: 'panel-h' },
     el('div', {}, el('h2', { id: 'mkName' }), el('div', {}, el('span', { class: 'big', id: 'mkLast', text: '—' }), ' ', el('span', { id: 'mkChg', class: 'mono' }))),
-    el('span', { class: 'sp' }), seg);
+    el('span', { class: 'sp' }), menu.el, seg);
   const legend = el('div', { class: 'legend', id: 'mkLegend' });
-  const box = el('div', { class: 'chart', id: 'mkChart', style: { height: '440px' } });
+  const box = el('div', { class: 'chart', id: 'mkChart' });
   readBox = el('div', { class: 'read' }, el('p', { class: 'note', text: 'Loading the market read…' }));
   tableBox = el('div', { class: 'tw' });
   root.append(
     el('div', { class: 'cols' },
-      el('div', { class: 'panel' }, head, box, legend),
-      el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Market read' }), el('span', { class: 'sp' }), el('span', { class: 'note', id: 'readExp' })), readBox)),
+      el('div', { class: 'panel chart-panel' }, head, box, legend),
+      el('div', { class: 'side-col' },
+        el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Market read' }), el('span', { class: 'sp' }), el('span', { class: 'note', id: 'readExp' })), readBox),
+        news.panel())),
     el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Index derivatives' }), el('span', { class: 'note', text: 'Click a row to switch the whole app to that index.' })), tableBox),
   );
   on('quotes', () => { if (S.tab === 'markets') { renderHead(); renderTable(); if (range === '1D') liveTick(); } });
-  on('symbol', () => { if (S.tab === 'markets') { draw(true); renderHead(); } });
+  on('symbol', () => { if (S.tab === 'markets') { draw(true); renderHead(); news.refresh(); } });
   on('expiries', () => { if (S.tab === 'markets') renderRead(); });
-  on('day', () => dailyCache.clear());
+  on('day', () => { dailyCache.clear(); cached.clear(); if (S.tab === 'markets') news.refresh(); });
 }
 
-export function show() { if (!chart) makeChart(); renderHead(); renderTable(); draw(true); renderRead(); }
+export function show() { if (!chart) makeChart(); renderHead(); renderTable(); draw(true); renderRead(); news.refresh(); }
 export function hide() {}
-export async function tick() { renderRead(); }
+let ticks = 0;
+export async function tick() { renderRead(); if (++ticks % 12 === 0) news.refresh(); }
 
 function makeChart() {
-  const c = themeColors();
-  chart = LightweightCharts.createChart($('#mkChart'), {
-    autoSize: true,
-    layout: { attributionLogo: false, background: { type: 'solid', color: c.bg }, textColor: c.muted, fontFamily: 'Inter, Segoe UI, system-ui, sans-serif', fontSize: 12 },
-    grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
-    rightPriceScale: { borderColor: c.line }, timeScale: { borderColor: c.line, timeVisible: true, secondsVisible: false },
-    crosshair: { mode: 1 }, localization: { priceFormatter: (p) => inr2.format(p) },
-  });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { const t = themeColors(); chart.applyOptions({ layout: { background: { type: 'solid', color: t.bg }, textColor: t.muted }, grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } } }); draw(true); });
+  chart = new StudyChart($('#mkChart'), { height: 420, onRemove: (id) => { prefs.on.delete(id); savePrefs(prefs); menu.refresh(); draw(false); } });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { chart.applyTheme(); draw(true); });
 }
-
-function clearSeries() { series.forEach((s) => chart.removeSeries(s)); series = []; }
 
 async function daily(symbol, days) {
   const k = `${symbol}|${days}`; const hit = dailyCache.get(k);
@@ -56,44 +57,88 @@ async function daily(symbol, days) {
   dailyCache.set(k, { at: Date.now(), rows }); return rows;
 }
 
+const want = (ids) => ids.some((id) => prefs.on.has(id));
+// Longest look-back among the enabled studies, so their lines are warmed up by the start of the visible range.
+const lookback = () => Math.max(60, ...[...prefs.on].map((id) => Math.max(0, ...Object.entries(prefs.params[id] || {}).filter(([k]) => ['n', 'slow'].includes(k)).map(([, v]) => v * (id.startsWith('ema') || id === 'macd' ? 3 : 1)))));
+const optHistory = (sym, days) => memo(`oh|${sym}|${days}`, S.meta.replay ? 10 * 60e3 : 50e3, () => api(`/api/option-history?symbol=${sym}&days=${days}`));
+const events = () => memo('events', 10 * 60e3, () => api('/api/events'));
+const toChartSec = (ms) => Math.floor(ms / 1000) + 19800; // IST wall clock as UTC, like NSE's chart times
+const istDate = (ms) => new Date(ms + 19800e3).toISOString().slice(0, 10);
+
+async function positioningNow(sym) {
+  await loadExpiries(sym); const exp = analysisExpiry(sym);
+  const ch = await loadChain(sym, exp); return { ...positioning(ch, exp), exp };
+}
+
 async function draw(reset) {
   if (!chart) return;
-  const c = themeColors(); const sym = S.symbol; const legend = $('#mkLegend');
+  const sym = S.symbol, r = range, seq = ++drawSeq, legend = $('#mkLegend');
+  const replayMode = Boolean(S.meta.replay);
+  const noHist = replayMode ? 'No option prices are stored for these days yet.' : 'Live IV and PCR history build up while the app is open (a sample a minute in market hours, a point a day). Downloading history in replay mode fills in older days.';
+  const notes = { iv: noHist, pcr: noHist, vix: 'India VIX history unavailable.', chain: 'Option chain unavailable.' };
   try {
-    if (range === '1D') {
+    let data, from = 0, info;
+    const newsShocks = async () => { const n = await news.loadNews(sym).catch(() => null); if (n?.hidden) notes.events = n.reason; return (n?.items || []).filter((i) => i.shock?.severity > 1); };
+    if (r === '1D') {
       const d = await api(`/api/intraday?symbol=${sym}`);
-      if (sym !== S.symbol || range !== '1D') return;
-      clearSeries();
-      const base = d.prevClose || d.points[0]?.v || 0;
-      const s = chart.addBaselineSeries({ baseValue: { type: 'price', price: base }, topLineColor: c.up, bottomLineColor: c.down, topFillColor1: hexA(c.up, .22), topFillColor2: hexA(c.up, .02), bottomFillColor1: hexA(c.down, .02), bottomFillColor2: hexA(c.down, .22), lineWidth: 2, priceLineVisible: true });
-      s.setData(d.points.map((p) => ({ time: p.t, value: p.v })));
-      s.createPriceLine({ price: base, color: c.muted, lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: 'Prev close' });
-      series.push(s); chart.applyOptions({ timeScale: { timeVisible: true } });
-      if (reset) chart.timeScale().fitContent();
-      legend.replaceChildren(el('span', {}, el('i', { class: 'sw', style: { background: c.up } }), 'Above previous close'), el('span', {}, el('i', { class: 'sw', style: { background: c.down } }), 'Below previous close'), el('span', { text: `${d.points.length} one-minute points · refreshes every 5 s` }));
+      const bars = d.points.map((p) => ({ time: p.t, o: p.v, h: p.v, l: p.v, c: p.v }));
+      const [vix, oh, ch, shocks] = await Promise.all([
+        want(['vix', 'shocks']) ? api('/api/intraday?symbol=INDIAVIX').catch(() => null) : null,
+        want(['iv', 'ivrv', 'pcr']) ? optHistory(sym, 30).catch(() => null) : null,
+        want(['emove', 'walls']) ? positioningNow(sym).catch(() => null) : null,
+        want(['events']) ? newsShocks() : []]);
+      const ip = (k, mul = 1) => (oh?.intraday || []).filter((p) => p[k] != null).map((p) => ({ time: p.t, value: p[k] * mul }));
+      data = { bars, style: 'baseline', base: d.prevClose || d.points[0]?.v || 0, intraday: true, perYear: 252 * 375,
+        vix: alignTo(bars, vix?.points.map((p) => ({ time: p.t, value: p.v })), 180), iv: alignTo(bars, ip('iv', 100), 900), pcr: alignTo(bars, ip('pcr'), 900), chain: ch,
+        events: shocks.map((i) => ({ time: toChartSec(i.t), title: `${i.title} (${i.source || 'news'})`, kind: 'shock', short: 'News' })), notes };
+      info = `${d.points.length} one-minute points · refreshes every 5 s. Indicator lengths count minutes on this view.`;
     } else {
-      const days = { '1M': 31, '3M': 92, '6M': 183, '1Y': 366 }[range];
-      const rows = await daily(sym, days + 80);
-      if (sym !== S.symbol || range === '1D') return;
-      clearSeries();
-      const closes = rows.map((r) => r.c); const s20 = sma(closes, 20), s50 = sma(closes, 50);
+      const days = { '1M': 31, '3M': 92, '6M': 183, '1Y': 366 }[r];
+      const fetchDays = Math.min(730, days + Math.ceil(lookback() * 1.5));
+      const [rows, vixRows, oh, ch, ev, shocks] = await Promise.all([
+        daily(sym, fetchDays),
+        want(['vix', 'shocks']) ? daily('INDIAVIX', fetchDays).catch(() => []) : [],
+        want(['iv', 'ivrv', 'pcr']) ? optHistory(sym, fetchDays).catch(() => null) : null,
+        want(['emove', 'walls']) ? positioningNow(sym).catch(() => null) : null,
+        want(['events']) ? events().catch(() => null) : null,
+        want(['events']) ? newsShocks() : []]);
+      const bars = rows.map((x) => ({ time: x.date, o: x.o, h: x.h, l: x.l, c: x.c }));
       const cutoff = new Date(now() - days * 864e5).toISOString().slice(0, 10);
-      const idx = rows.map((r, i) => [r, i]).filter(([r]) => r.date >= cutoff);
-      const cs = chart.addCandlestickSeries({ upColor: c.up, downColor: c.down, borderVisible: false, wickUpColor: c.up, wickDownColor: c.down });
-      cs.setData(idx.map(([r]) => ({ time: r.date, open: r.o, high: r.h, low: r.l, close: r.c })));
-      const l20 = chart.addLineSeries({ color: c.accent, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-      l20.setData(idx.filter(([, i]) => s20[i] != null).map(([r, i]) => ({ time: r.date, value: s20[i] })));
-      const l50 = chart.addLineSeries({ color: c.warn, lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-      l50.setData(idx.filter(([, i]) => s50[i] != null).map(([r, i]) => ({ time: r.date, value: s50[i] })));
-      series.push(cs, l20, l50); chart.applyOptions({ timeScale: { timeVisible: false } });
-      chart.timeScale().fitContent();
-      legend.replaceChildren(el('span', {}, el('i', { class: 'sw', style: { background: c.accent } }), '20-day average'), el('span', {}, el('i', { class: 'sw', style: { background: c.warn } }), '50-day average'), el('span', { text: 'Daily candles: green closed higher than it opened, red lower' + (S.meta.replay && idx.length < days * 0.6 * 5 / 7 ? '. Only part of this range is downloaded.' : '') }));
+      from = Math.max(0, bars.findIndex((b) => b.time >= cutoff));
+      const ohr = oh?.rows || [];
+      if (ev?.hidden) notes.events = ev.reason;
+      const evs = (ev?.events || []).map((e) => ({ time: e.date, title: `${e.title}${e.note ? ': ' + e.note : ''}`, kind: e.kind, short: e.kind === 'scheduled' ? 'Event' : 'Shock' }));
+      // Shock headlines of the last few days, pinned to their day.
+      for (const i of shocks) evs.push({ time: istDate(i.t), title: `${i.title} (${i.source || 'news'})`, kind: 'shock', short: 'News' });
+      data = { bars, style: 'candles', intraday: false, perYear: 252,
+        vix: alignTo(bars, vixRows.map((x) => ({ time: x.date, value: x.c }))), iv: alignTo(bars, ohr.filter((x) => x.iv != null).map((x) => ({ time: x.date, value: x.iv * 100 }))),
+        pcr: alignTo(bars, ohr.filter((x) => x.pcr != null).map((x) => ({ time: x.date, value: x.pcr }))), chain: ch, events: evs, notes };
+      info = `Daily candles: green closed higher than it opened, red lower. Drag the chart to see earlier days${replayMode && bars.length - from < days * 0.6 * 5 / 7 ? '. Only part of this range is downloaded.' : '.'}`;
     }
+    if (seq !== drawSeq || sym !== S.symbol || r !== range) return;
+    chart.render(data, prefs, reset);
+    if (reset && from) chart.main.timeScale().setVisibleLogicalRange({ from, to: data.bars.length + 3 });
+    const panes = STUDIES.filter((s) => s.where === 'pane' && prefs.on.has(s.id)).length;
+    legend.replaceChildren(el('span', { text: info }), el('span', { text: prefs.on.size ? `${prefs.on.size} indicator${prefs.on.size > 1 ? 's' : ''} on${panes ? `, ${panes} in panes below` : ''}. Hover the chart to read values; × hides one.` : 'No indicators on: open Indicators to add some.' }));
     lastDraw = Date.now();
   } catch (e) { legend.replaceChildren(el('span', { class: 'down', text: `Chart unavailable: ${e.message}` })); }
 }
 
 function liveTick() { if (Date.now() - lastDraw > 9000) draw(false); }
+
+// Option-market positioning from one chain: ATM IV, expected move, put–call ratio, OI walls and max pain.
+export function positioning(ch, exp) {
+  const spot = ch.spot;
+  const atm = ch.rows.reduce((a, r) => (Math.abs(r.strike - spot) < Math.abs(a.strike - spot) ? r : a));
+  const ivs = [atm.ce?.iv, atm.pe?.iv].filter((x) => x > 0); const iv = ivs.length ? ivs.reduce((a, b) => a + b) / ivs.length : null;
+  const move = iv ? spot * iv / 100 * Math.sqrt(yearsTo(exp)) : null;
+  const tot = ch.rows.reduce((a, r) => ({ ce: a.ce + (r.ce?.oi || 0), pe: a.pe + (r.pe?.oi || 0) }), { ce: 0, pe: 0 });
+  const callWall = ch.rows.reduce((a, r) => ((r.ce?.oi || 0) > (a.ce?.oi || 0) ? r : a)).strike;
+  const putWall = ch.rows.reduce((a, r) => ((r.pe?.oi || 0) > (a.pe?.oi || 0) ? r : a)).strike;
+  let maxPain = null, best = Infinity;
+  for (const x of ch.rows) { let pay = 0; for (const r of ch.rows) pay += (r.ce?.oi || 0) * Math.max(x.strike - r.strike, 0) + (r.pe?.oi || 0) * Math.max(r.strike - x.strike, 0); if (pay < best) { best = pay; maxPain = x.strike; } }
+  return { spot, iv, move, pcr: tot.ce ? tot.pe / tot.ce : null, callWall, putWall, maxPain };
+}
 
 function renderHead() {
   const q = quote(); if (!q) return;
@@ -136,17 +181,9 @@ async function renderRead() {
     const trend = q.last > m20 && m20 > m50 ? ['Uptrend', 'up', 'Above its 20-day average, which is above its 50-day'] : q.last < m20 && m20 < m50 ? ['Downtrend', 'down', 'Below its 20-day average, which is below its 50-day'] : ['Mixed', '', 'Averages disagree: no clear trend'];
     const rets = d.slice(-21).map((r, i, a) => (i ? Math.log(r.c / a[i - 1].c) : null)).filter((x) => x != null);
     const rv = rets.length > 5 ? stdev(rets) * Math.sqrt(252) * 100 : null;
-    // ATM implied vol and expected move.
-    const atm = ch.rows.reduce((a, r) => (Math.abs(r.strike - spot) < Math.abs(a.strike - spot) ? r : a));
-    const ivs = [atm.ce?.iv, atm.pe?.iv].filter((x) => x > 0); const iv = ivs.length ? ivs.reduce((a, b) => a + b) / ivs.length : null;
-    const T = yearsTo(exp); const move = iv ? spot * iv / 100 * Math.sqrt(T) : null;
-    // Positioning.
-    const tot = ch.rows.reduce((a, r) => ({ ce: a.ce + (r.ce?.oi || 0), pe: a.pe + (r.pe?.oi || 0) }), { ce: 0, pe: 0 });
-    const pcr = tot.ce ? tot.pe / tot.ce : null;
-    const callWall = ch.rows.reduce((a, r) => ((r.ce?.oi || 0) > (a.ce?.oi || 0) ? r : a)).strike;
-    const putWall = ch.rows.reduce((a, r) => ((r.pe?.oi || 0) > (a.pe?.oi || 0) ? r : a)).strike;
-    let mp = null, best = Infinity;
-    for (const x of ch.rows) { let pay = 0; for (const r of ch.rows) pay += (r.ce?.oi || 0) * Math.max(x.strike - r.strike, 0) + (r.pe?.oi || 0) * Math.max(r.strike - x.strike, 0); if (pay < best) { best = pay; mp = x.strike; } }
+    const P = positioning({ ...ch, spot }, exp);
+    const { iv, move, pcr, callWall, putWall, maxPain: mp } = P;
+    const nw = await news.loadNews(sym).catch(() => null);
     // VIX percentile.
     const vixNow = S.quotes?.vix?.last; const vc = vixd.map((r) => r.c);
     const vixPct = vixNow && vc.length > 20 ? Math.round(vc.filter((v) => v < vixNow).length / vc.length * 100) : null;
@@ -161,6 +198,7 @@ async function renderRead() {
     if (vixNow != null) sum.push(`India VIX at ${vixNow.toFixed(2)} says the market mood is ${mood}${vixPct != null ? ` (higher than ${vixPct}% of the past year)` : ''}.`);
     if (iv && move) sum.push(`Options price a move of about ±${pts(move)} points by ${fmtExpiry(exp)}.`);
     if (rich != null) sum.push(rich > 1.5 ? 'Options look expensive against recent movement, which favours sellers.' : rich < -1.5 ? 'Options look cheap against recent movement, which favours buyers.' : 'Options are priced roughly in line with recent movement.');
+    if (nw && !nw.hidden && nw.items.length) sum.push(`News mood is ${nw.mood.label.toLowerCase()}${nw.mood.shocks ? `, with ${nw.mood.shocks} shock headline${nw.mood.shocks > 1 ? 's' : ''} that could jolt prices` : ''}.`);
     sum.push(`Writers have built a range from about ${pts(Math.min(putWall, callWall))} to ${pts(Math.max(putWall, callWall))}.`);
     readBox.replaceChildren(
       el('p', { class: 'summary', text: sum.join(' ') }),
@@ -174,6 +212,7 @@ async function renderRead() {
         row('Put–call ratio', pcr ? pcr.toFixed(2) : '—', pcr ? (pcr > 1 ? 'More puts open: writers lean supportive' : 'More calls open: writers lean cautious') : ''),
         row('Call wall / put wall', `${pts(callWall)} / ${pts(putWall)}`, 'Strikes with the most open calls and puts'),
         row('Max pain', pts(mp), 'Close where most options would expire worthless'),
+        nw && !nw.hidden ? row('News mood', nw.mood.label, `${nw.mood.positive} positive · ${nw.mood.negative} negative headlines${nw.mood.shocks ? ` · ${nw.mood.shocks} shocks` : ''}`, nw.mood.score > 0.08 ? 'up' : nw.mood.score < -0.08 ? 'down' : '') : null,
       ),
     );
   } catch (e) { readBox.replaceChildren(el('p', { class: 'errbox', text: `Market read unavailable: ${e.message}` })); }

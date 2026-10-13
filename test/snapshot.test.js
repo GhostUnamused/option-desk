@@ -21,6 +21,7 @@ test('every snapshot method returns only rows dated on or before as-of', () => {
       for (const r of s.chain('NIFTY', e)) { assert.equal(r.date, asOf); all.push(r.date); }
       for (const r of s.contractHistory('NIFTY', e, 24000, 'CE', 3650)) all.push(r.date);
     }
+    for (const r of s.optionHistory('NIFTY', 3650)) { all.push(r.date); assert.ok(r.expiry > r.date); }
     assert.ok(all.length > 0);
     for (const d of all) assert.ok(d <= asOf, `${d} leaked into the ${asOf} snapshot`);
     // The latest row is the as-of day itself, not a later one.
@@ -85,3 +86,14 @@ test('the replay market (provider) never shows data after the replay date', asyn
 });
 
 test.after(() => store.close());
+
+test('option history: ATM IV of an expiry 7+ days out and the nearest-expiry put–call ratio, up to as-of only', () => {
+  const s = getSnapshot(store, '2024-07-08', { riskFree: 0.06 });
+  const h = s.optionHistory('NIFTY', 3650);
+  assert.deepEqual(h.map((r) => r.date), DAYS.filter((d) => d <= '2024-07-08'));
+  for (const r of h) {
+    assert.ok(Math.abs(r.iv - 0.15) < 0.01, `${r.date} IV ${r.iv} should be about 15%`);
+    assert.ok((Date.parse(r.expiry) - Date.parse(r.date)) / 864e5 >= 7);
+    assert.equal(r.pcr, 1); // equal OI on every strike in the test market
+  }
+});

@@ -10,6 +10,9 @@ import * as desktop from './lib/desktop.js';
 import { ReplayEngine } from './lib/replay/engine.js';
 import { ReplayProvider } from './lib/replay/provider.js';
 import { disguise } from './lib/replay/blind.js';
+import { News } from './lib/news.js';
+import { eventsUpTo } from './lib/events.js';
+import { LiveOptionHistory } from './lib/opthist.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const portArg = process.argv.indexOf('--port');
@@ -21,6 +24,11 @@ let replay = null, replayError = null;
 if (MOCK) { try { replay = new ReplayEngine(desktop.DATA_DIR); } catch (e) { replayError = e.message; console.log(`  Replay unavailable: ${e.message}`); } }
 const provider = MOCK ? (replay?.provider || new ReplayProvider({ snapshot() { throw new Error(replayError); } })) : new NseProvider();
 const account = MOCK ? replay?.account : new PaperAccount(path.join(desktop.DATA_DIR, 'paper.json'), provider);
+const news = new News({ cacheFile: path.join(desktop.DATA_DIR, 'news-cache.json') });
+const liveHist = MOCK ? null : new LiveOptionHistory(desktop.DATA_DIR, provider);
+const istToday = () => new Date(Date.now() + 19800e3).toISOString().slice(0, 10);
+// Headlines and event names give the real date away, so a blind session gets none.
+const BLIND_NEWS = 'News and event markers are hidden in blind mode, because headlines would give away the real date.';
 const needAccount = () => { if (!account) throw new Error(replayError); return account; };
 const NOT_REPLAY = 'Replay is only available after switching to replay (node server.js --sim).';
 const needReplay = () => { if (!replay) throw new Error(replayError || NOT_REPLAY); return replay; };
@@ -54,6 +62,21 @@ const routes = {
   'GET /api/intraday': async (q) => provider.intraday(sym(q)),
   'GET /api/daily': async (q) => ({ rows: await provider.daily(sym(q), Math.min(Number(q.get('days')) || 365, 730)) }),
   'GET /api/option-intraday': async (q) => provider.optionIntraday(q.get('id')),
+  'GET /api/option-history': async (q) => {
+    const days = Math.min(Number(q.get('days')) || 365, 730);
+    if (MOCK) return { rows: needReplay().snapshot().optionHistory(sym(q), days), intraday: [] };
+    return liveHist.history(sym(q), days, Boolean((await provider.marketStatus().catch(() => null))?.open));
+  },
+  'GET /api/news': async (q) => {
+    if (!MOCK) return news.latest(sym(q));
+    if (needReplay().blindDays()) return { hidden: true, reason: BLIND_NEWS, items: [] };
+    return news.asOf(replay.snapshot().date, sym(q));
+  },
+  'GET /api/events': async () => {
+    if (!MOCK) return { events: eventsUpTo(istToday()) };
+    if (needReplay().blindDays()) return { hidden: true, reason: BLIND_NEWS, events: [] };
+    return { events: eventsUpTo(replay.snapshot().date) };
+  },
   'GET /api/account': async () => needAccount().summary(),
   'POST /api/preview': async (q, b) => needAccount().preview(b.legs),
   'POST /api/order': async (q, b) => tradeLock(async () => ({ ...(await canTrade().place(b.legs, b.tag || '', b.note || '')), account: await account.summary() })),

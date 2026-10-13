@@ -1,6 +1,6 @@
 {
   "name": "option-desk",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Local NSE index options desk: live chains, charts, strategy builder, paper trading and a historical replay.",
