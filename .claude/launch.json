@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "option-desk-sim",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js", "--sim"],
+      "port": 4321
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option Desk</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23000'/%3E%3Cpath d='M6 22 L13 14 L18 18 L26 9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/css/app.css">
+<script src="/vendor/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">Option Desk</span></div>
+  <div class="vix" id="vixBox" aria-live="polite" hidden></div>
+  <div class="tickers" id="tickers" aria-label="Index quotes"></div>
+  <button class="acct" id="acctMini" type="button" title="Open positions"></button>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button role="tab" data-tab="learn">Learn</button>
+  <button role="tab" data-tab="markets">Markets</button>
+  <button role="tab" data-tab="chain">Option chain</button>
+  <button role="tab" data-tab="strategy">Strategy builder</button>
+  <button role="tab" data-tab="positions">Paper account</button>
+  <span class="tabs-sym" id="symLabel"></span>
+  <button class="pill" id="srcPill" type="button" disabled>Connecting</button>
+  <button class="pill" id="updPill" type="button" hidden></button>
+  <span class="pill" id="mktPill" hidden></span>
+  <button class="btn ghost sm help" id="guideBtn" type="button" title="Show the beginner guide on the Markets tab">Beginner guide</button>
+</nav>
+
+<main>
+  <section class="tab" id="tab-learn" role="tabpanel" hidden></section>
+  <section class="tab" id="tab-markets" role="tabpanel" hidden></section>
+  <section class="tab" id="tab-chain" role="tabpanel" hidden></section>
+  <section class="tab" id="tab-strategy" role="tabpanel" hidden></section>
+  <section class="tab" id="tab-positions" role="tabpanel" hidden></section>
+</main>
+
+<dialog id="ticket" aria-label="Order ticket"></dialog>
+<aside id="drawer" class="drawer" hidden aria-label="Option detail"></aside>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<footer class="foot">Paper trading only. Prices come from NSE's public website, which can lag, rate-limit or change without notice. Charges and margins are estimates. Nothing here is investment advice. <span id="appVer"></span>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>.</footer>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
