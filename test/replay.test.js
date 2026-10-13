@@ -40,9 +40,13 @@ test('next expiry jumps to expiry day and settles open positions at intrinsic va
   const settle = e.account.state.orders.filter((o) => o.id.startsWith('S'));
   assert.equal(settle.find((o) => o.type === 'CE').price, close - 24000);
   assert.equal(settle.find((o) => o.type === 'PE').price, 0);
-  // Cash = start − premiums − charges + call intrinsic × 25.
+  // Cash = start − premiums − charges + call intrinsic × 25 − settlement charges (only the in-the-money call has any).
   const paid = r.fills.reduce((x, f) => x + f.premium + f.charges, 0);
-  assert.ok(Math.abs(e.account.state.cash - (before - paid + 300 * 25)) < 0.02);
+  const ce = settle.find((o) => o.type === 'CE'), pe = settle.find((o) => o.type === 'PE');
+  assert.equal(pe.charges, 0);
+  // ₹20 brokerage + 18% GST + 0.125% exercise STT on 300 × 25 (July 2024 rates).
+  assert.equal(ce.charges, Math.round((20 + 3.6 + 300 * 25 * 0.00125) * 100) / 100);
+  assert.ok(Math.abs(e.account.state.cash - (before - paid + 300 * 25 - ce.charges)) < 0.02);
 });
 
 test('fills are the close plus or minus slippage, and zero-volume strikes are refused', async () => {
@@ -100,4 +104,16 @@ test('blind mode shifts every date by whole weeks and undoes it exactly', async 
   assert.ok(e.blindDays() !== 0 && e.blindDays() % 7 === 0);
   await e.end();
   assert.equal(e.blindDays(), 0); // dates are real again once the session ends
+});
+
+test('charges follow the rates in force on the trade date', async () => {
+  const { legCharges } = await import('../lib/paper.js');
+  // Sell ₹1,00,000 of premium. Oct 2024: STT 0.1%, NSE 0.03503%. Apr 2026: STT 0.15%, NSE 0.03553%.
+  const a = legCharges('SELL', 100000, '2024-10-15'), b = legCharges('SELL', 100000, '2026-05-04'), old = legCharges('SELL', 100000, '2023-01-10');
+  assert.equal(a.parts.stt, 100); assert.equal(b.parts.stt, 150); assert.equal(old.parts.stt, 50);
+  assert.equal(a.parts.exchange, 35.03); assert.equal(b.parts.exchange, 35.53);
+  assert.equal(a.parts.brokerage, 20); assert.equal(a.parts.stamp, 0);
+  assert.equal(a.parts.gst, Math.round((20 + 35.03 + 0.1) * 0.18 * 100) / 100);
+  assert.equal(legCharges('BUY', 100000, '2024-10-15').parts.stamp, 3);
+  assert.equal(a.total, Math.round(Object.values(a.parts).reduce((s, v) => s + v, 0) * 100) / 100);
 });

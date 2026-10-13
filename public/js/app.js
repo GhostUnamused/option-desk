@@ -1,5 +1,5 @@
 // Entry point: header quotes, tabs, polling.
-import { api, el, $, $$, inr2, pct, tone, rs, srs, toast, store, vixMood } from './util.js';
+import { api, el, $, $$, inr2, pct, tone, rs, srs, toast, store, vixMood, fmtDay } from './util.js';
 import { initGlossary, term } from './glossary.js';
 import { S, on, emit, setSymbol, loadExpiries, refreshAccount } from './state.js';
 import * as learn from './learn.js';
@@ -15,7 +15,7 @@ const TABS = { learn, markets, chain, strategy, positions };
 // Replay mode before any session: only the lessons and the Replay tab have anything to show.
 const replayIdle = () => Boolean(S.meta?.replay && !S.meta.replay.date); // ended sessions stay viewable; the server refuses their orders
 const NEEDS_MARKET = ['markets', 'chain', 'strategy', 'positions'];
-let lastQuote = {};
+let lastQuote = {}, offline = null, quotesAt = 0;
 
 // One plain sentence at the top of each tab saying what it is for.
 const INTROS = {
@@ -76,8 +76,6 @@ function renderTickers() {
     if (prev != null && prev !== i.last) { b.classList.remove('flash-up', 'flash-down'); void b.offsetWidth; b.classList.add(i.last > prev ? 'flash-up' : 'flash-down'); }
     lastQuote[i.symbol] = i.last;
   }
-  const m = q.market, mp = $('#mktPill');
-  if (m && !m.replay) { mp.hidden = false; mp.className = 'pill ' + (m.open ? 'ok live' : 'warn'); mp.replaceChildren(el('span', { class: 'dot' }), m.open ? 'Market open' : 'Market closed'); mp.title = m.message || ''; }
   $('#symLabel').textContent = `${S.meta.indices[S.symbol].name} · lot ${S.meta.indices[S.symbol].lot}`;
   tickerFades();
 }
@@ -91,6 +89,35 @@ function renderVix(v) {
     el('span', { class: 'n' }, term('India VIX'), el('span', { class: 'mood', text: m.label })),
     el('span', { class: 'v' }, el('b', { text: v.last.toFixed(2) }), ' ', el('span', { class: 'c ' + tone(v.pct), text: pct(v.pct) })));
   box.title = m.hint;
+}
+
+// Session block in the header. Live: market open or closed and the IST clock, ticking every second.
+// Replay: which past day the prices come from.
+const pad2 = (n) => String(n).padStart(2, '0');
+const istParts = (ms) => { const d = new Date(ms + 5.5 * 3600e3); return { h: d.getUTCHours(), m: d.getUTCMinutes(), s: d.getUTCSeconds(), wd: d.getUTCDay() }; };
+function sessionView() {
+  const r = S.meta.replay;
+  if (r) {
+    if (!r.date) return { key: 'replay-idle', led: 'warn', label: 'Historical replay', main: 'Not started', sub: '', title: 'Start a session in the Replay tab.' };
+    return { key: 'replay', led: 'warn', label: r.blind ? 'Blind replay' : 'Historical replay', main: r.blind ? `Day ${r.day}` : fmtDay(r.date, { weekday: undefined }), sub: 'close', title: 'Prices are this day\'s closing prices (15:30 IST).' };
+  }
+  const t = istParts(Date.now()); const clock = `${pad2(t.h)}:${pad2(t.m)}:${pad2(t.s)}`;
+  const updated = quotesAt ? `Prices last updated ${new Date(quotesAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false })} IST.` : '';
+  if (offline) return { key: 'offline', led: 'bad', label: 'Data offline', main: clock, sub: 'IST', title: `${offline} ${updated}` };
+  const m = S.quotes?.market;
+  if (!m) return { key: 'connecting', led: '', label: 'Connecting', main: clock, sub: 'IST', title: '' };
+  const left = 15 * 60 + 30 - (t.h * 60 + t.m);
+  const sub = m.open && left > 0 ? `closes in ${left >= 60 ? `${Math.floor(left / 60)} h ` : ''}${left % 60} min` : 'IST';
+  return { key: m.open ? 'open' : 'closed', led: m.open ? 'ok live' : '', label: m.open ? 'Market open' : 'Market closed', main: clock, sub, title: [m.message, updated, 'NSE trades 9:15 to 15:30 IST, Monday to Friday.'].filter(Boolean).join(' ') };
+}
+function renderSession() {
+  const box = $('#session'); if (!S.meta) return;
+  const v = sessionView(); box.hidden = false; box.title = v.title;
+  if (box.dataset.key !== v.key) {
+    box.dataset.key = v.key;
+    box.replaceChildren(el('span', { class: 'pill ' + v.led, text: v.label }), el('span', { class: 'clk' }, el('b', {}), el('span', { class: 'z' })));
+  }
+  box.querySelector('.clk b').textContent = v.main; box.querySelector('.clk .z').textContent = v.sub;
 }
 
 // Fade whichever edge of the quote strip has more chips hidden past it.
@@ -184,16 +211,13 @@ function initDesktop() {
 }
 
 async function pollQuotes() {
-  const src = $('#srcPill');
-  if (replayIdle()) { src.className = 'pill warn'; src.textContent = 'Replay: not started'; return; }
+  if (replayIdle()) { renderSession(); return; }
   try {
     S.quotes = await api('/api/indices');
-    src.className = 'pill ' + (S.meta.mock ? 'warn' : 'ok'); src.textContent = S.meta.mock ? 'Historical replay' : 'Live NSE';
-    src.title = S.meta.mock ? 'Prices are the closing prices of a past trading day' : '';
+    offline = null; quotesAt = Date.now();
     renderTickers(); emit('quotes', S.quotes);
-  } catch (e) {
-    const src = $('#srcPill'); src.className = 'pill bad'; src.textContent = 'Data offline'; src.title = e.message;
-  }
+  } catch (e) { offline = e.message; }
+  renderSession();
 }
 
 function showTab(name) {
@@ -208,6 +232,13 @@ function showTab(name) {
     if (on) mod.show?.(); else mod.hide?.();
   }
   if (location.hash.slice(1) !== name) history.replaceState(null, '', '#' + name);
+  moveInk();
+}
+
+// One underline slides between tabs instead of each tab drawing its own.
+function moveInk() {
+  const b = $('.tabs [aria-selected="true"]'), ink = $('#tabInk'); if (!b || !ink) return;
+  ink.style.width = b.offsetWidth - 24 + 'px'; ink.style.transform = `translateX(${b.offsetLeft + 12}px)`;
 }
 
 function every(ms, fn) {
@@ -230,6 +261,7 @@ async function boot() {
   $('#tab-markets').prepend(guide());
   $('#guideBtn').addEventListener('click', () => { $('#guide').hidden = false; store.set('guideHidden', false); showTab('markets'); scrollTo({ top: 0, behavior: 'smooth' }); });
   const top = $('.top'); new ResizeObserver(() => document.documentElement.style.setProperty('--top-h', top.offsetHeight + 'px')).observe(top);
+  const tabs = $('.tabs'); new ResizeObserver(() => document.documentElement.style.setProperty('--tabs-h', tabs.getBoundingClientRect().height + 'px')).observe(tabs);
   $$('.tabs [data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
   $('#acctMini').addEventListener('click', () => showTab('positions'));
   window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
@@ -245,6 +277,8 @@ async function boot() {
   showTab(location.hash.slice(1) || 'markets');
 
   every(5000, pollQuotes);
+  if (!S.meta.replay) setInterval(() => { if (!document.hidden) renderSession(); }, 1000);
+  addEventListener('resize', moveInk); document.fonts?.ready.then(moveInk);
   every(5000, () => TABS[S.tab].tick?.());
   every(8000, () => (S.tab !== 'positions' && !replayIdle() ? refreshAccount() : null));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollQuotes(); TABS[S.tab].tick?.(); } });

@@ -1,7 +1,7 @@
 // Strategy builder: presets, editable legs at live prices, payoff, odds, Greeks, scenarios, place as a paper trade.
 import { api, el, $, inr0, inr2, rs, srs, pts, store, toast, fmtExpiry, fmtLeft } from './util.js';
 import { term } from './glossary.js';
-import { S, on, cfg, loadChain, loadExpiries, analysisExpiry } from './state.js';
+import { S, on, emit, cfg, loadChain, loadExpiries, analysisExpiry } from './state.js';
 import { yearsTo, bs } from './bs.js';
 import { analyze, greeks, drawPayoff, pnlAt, payoffLegend } from './payoff.js';
 import * as ticket from './ticket.js';
@@ -31,19 +31,20 @@ const PRESETS = [
 ];
 const PRESET = Object.fromEntries(PRESETS.flatMap(([, list]) => list.map(([k, n, legs, blurb]) => [k, { name: n, legs, blurb }])));
 
-let root, legs = store.get('strategyLegs', []), preset = store.get('strategyPreset', 'bull_call'), days = 0, margin = null, chains = {}, structureKey = '';
+let root, legs = store.get('strategyLegs', []), preset = store.get('strategyPreset', 'bull_call'), days = 0, margin = null, chains = {}, structureKey = '', placed = null;
 
 export function init(sec) {
   root = sec;
   const sel = el('select', { class: 'sel', id: 'stPreset', 'aria-label': 'Strategy', onchange: (e) => loadPreset(e.target.value) },
+    el('option', { value: '', disabled: true, text: 'Choose a strategy…' }),
     PRESETS.map(([g, list]) => el('optgroup', { label: g }, list.map(([k, n]) => new Option(n, k, false, k === preset)))));
   root.append(
     el('div', { class: 'panel' },
       el('div', { class: 'panel-h' }, el('h2', { id: 'stTitle', text: 'Strategy builder' }), el('span', { class: 'sp' }),
         el('label', { class: 'note', for: 'stPreset', text: 'Start from' }), sel,
         el('button', { class: 'btn ghost sm', type: 'button', text: 'Add a leg', onclick: addBlank }),
-        el('button', { class: 'btn ghost sm', type: 'button', text: 'Clear', onclick: () => { legs = []; save(); renderAll(); } }),
-        el('button', { class: 'btn', type: 'button', id: 'stPlace', text: 'Place as paper trade', onclick: () => { if (!legs.length) return toast('Add at least one leg first.', 'err'); ticket.openBasket(legs.map((l) => ({ ...l })), PRESET[preset]?.name && structureMatchesPreset() ? PRESET[preset].name : 'Custom strategy'); } })),
+        el('button', { class: 'btn ghost sm', type: 'button', text: 'Clear', onclick: () => { legs = []; preset = 'custom'; placed = null; save(); renderAll(); } }),
+        el('button', { class: 'btn', type: 'button', id: 'stPlace', text: 'Place as paper trade', onclick: placeAll })),
       el('p', { class: 'note', id: 'stBlurb', style: { marginBottom: '10px' } }),
       el('div', { class: 'tw' }, el('table', { class: 'legs', id: 'stLegs' })),
     ),
@@ -58,7 +59,10 @@ export function init(sec) {
       el('div', { class: 'panel' }, el('h2', { text: 'How it reacts (Greeks)', style: { marginBottom: '10px' } }), el('div', { class: 'grid', id: 'stGreeks', style: { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' } }))),
   );
   on('addLeg', (l) => {
+    // A leg from the chain starts a new custom strategy unless you are already building one, so it never lands inside a ready-made preset.
     if (legs.length && legs[0].symbol !== l.symbol) { legs = []; toast(`Strategy switched to ${cfg(l.symbol).short}.`); }
+    else if (legs.length && preset !== 'custom') { legs = []; toast('Started a new custom strategy with this leg.'); }
+    placed = null;
     legs.push({ symbol: l.symbol, expiry: l.expiry, strike: l.strike, type: l.type, side: l.side || 'BUY', lots: l.lots || 1 });
     preset = 'custom'; save(); if (S.tab === 'strategy') renderAll();
   });
@@ -69,8 +73,19 @@ export function init(sec) {
 function save() { store.set('strategyLegs', legs); store.set('strategyPreset', preset); }
 function structureMatchesPreset() { return preset !== 'custom'; }
 
+// Place the legs as one basket. Once they are in, the builder empties so the next strategy starts clean.
+function placeAll() {
+  if (!legs.length) return toast('Add at least one leg first.', 'err');
+  const name = PRESET[preset]?.name && structureMatchesPreset() ? PRESET[preset].name : 'Custom strategy';
+  ticket.openBasket(legs.map((l) => ({ ...l })), name, () => {
+    placed = { name, n: legs.length, symbol: legs[0].symbol };
+    legs = []; preset = 'custom'; days = 0; save(); renderAll();
+  });
+}
+
 async function loadPreset(key) {
-  preset = key; const p = PRESET[key]; const sym = S.symbol; await loadExpiries(sym);
+  if (!PRESET[key]) return;
+  preset = key; placed = null; const p = PRESET[key]; const sym = S.symbol; await loadExpiries(sym);
   const exp = S.expiry[sym] && yearsTo(S.expiry[sym]) * 365 > 0.5 ? S.expiry[sym] : analysisExpiry(sym);
   const c = await loadChain(sym, exp); const step = cfg(sym).step;
   const atm = c.rows.reduce((a, r) => (Math.abs(r.strike - c.spot) < Math.abs(a.strike - c.spot) ? r : a)).strike;
@@ -79,9 +94,10 @@ async function loadPreset(key) {
   days = 0; save(); renderAll();
 }
 
-function addBlank() {
+async function addBlank() {
+  placed = null;
   const sym = legs[0]?.symbol || S.symbol; const exp = legs[0]?.expiry || S.expiry[sym];
-  const c = chains[`${sym}|${exp}`]; const atm = c ? c.rows.reduce((a, r) => (Math.abs(r.strike - c.spot) < Math.abs(a.strike - c.spot) ? r : a)).strike : 0;
+  const c = chains[`${sym}|${exp}`] || (chains[`${sym}|${exp}`] = await loadChain(sym, exp).catch(() => null)); const atm = c ? c.rows.reduce((a, r) => (Math.abs(r.strike - c.spot) < Math.abs(a.strike - c.spot) ? r : a)).strike : 0;
   legs.push({ symbol: sym, expiry: exp, strike: atm, type: 'CE', side: 'BUY', lots: 1 }); preset = 'custom'; save(); renderAll();
 }
 
@@ -92,7 +108,7 @@ export async function show() {
     const open = S.expiries[legs[0].symbol] || [];
     if (open.length && legs.some((l) => !open.includes(l.expiry))) { legs = []; save(); toast('The saved strategy\'s expiry is over, so it was rebuilt on the nearest expiry.'); }
   }
-  if (!legs.length) { await loadPreset(PRESET[preset] ? preset : 'bull_call').catch((e) => toast(e.message, 'err')); return; }
+  if (!legs.length && !placed) { await loadPreset(PRESET[preset] ? preset : 'bull_call').catch((e) => toast(e.message, 'err')); return; }
   renderAll();
 }
 export function hide() {}
@@ -133,7 +149,10 @@ function renderLegs() {
   const t = $('#stLegs'); const sym = legs[0]?.symbol || S.symbol;
   $('#stTitle').textContent = `Strategy builder · ${cfg(sym).short}`;
   $('#stPreset').value = PRESET[preset] ? preset : '';
-  const blurb = $('#stBlurb'); blurb.replaceChildren(PRESET[preset]?.blurb || 'Custom strategy. Change any leg below; everything recalculates at live prices.');
+  const blurb = $('#stBlurb');
+  if (placed && !legs.length) blurb.replaceChildren(el('span', { class: 'placed' }, el('b', { text: `${placed.name} placed.` }), ` Its ${placed.n} leg${placed.n > 1 ? 's are' : ' is'} now in your account. Choose another strategy above or add a leg to start a new one.`), ' ',
+    el('button', { class: 'btn ghost sm', type: 'button', text: 'See my positions', onclick: () => emit('goto', 'positions') }));
+  else blurb.replaceChildren(PRESET[preset]?.blurb || (legs.length ? 'Custom strategy. Change any leg below; everything recalculates at live prices.' : 'Choose a ready-made strategy above, or add legs one at a time.'));
   if (legs.length && sym !== S.symbol) blurb.append(' ', el('button', { class: 'btn ghost sm', type: 'button', text: `Start a ${PRESET[preset]?.name || 'bull call spread'} on ${cfg(S.symbol).short} instead`, onclick: () => loadPreset(PRESET[preset] ? preset : 'bull_call') }));
   const exps = S.expiries[sym] || [];
   t.replaceChildren(el('thead', {}, el('tr', {}, ['Action', 'Type', 'Expiry', 'Strike', 'Lots', 'Fill price', 'Bid / ask', 'IV', 'Premium', ''].map((h, i) => el('th', { class: i < 4 ? 'l' : '' }, term(h))))));
@@ -150,7 +169,7 @@ function renderLegs() {
       el('td', { class: 'p-fill' }), el('td', { class: 'p-ba muted' }), el('td', { class: 'p-iv' }), el('td', { class: 'p-prem' }),
       el('td', {}, el('button', { class: 'x', type: 'button', 'aria-label': 'Remove leg', text: '×', onclick: () => { legs.splice(i, 1); preset = 'custom'; save(); renderAll(); } }))));
   });
-  if (!legs.length) tb.append(el('tr', {}, el('td', { class: 'l t empty', colspan: '10', text: 'No legs yet. Pick a strategy above, add a leg, or press B/S then "Add to strategy" from the option chain.' })));
+  if (!legs.length) tb.append(el('tr', {}, el('td', { class: 'l t empty', colspan: '10', text: placed ? 'Nothing here yet: the last strategy has been placed.' : 'No legs yet. Pick a strategy above, add a leg, or press B/S then "Add to strategy" from the option chain.' })));
   t.append(tb);
   renderPrices();
 }
@@ -174,7 +193,7 @@ async function fetchMargin() {
 
 function renderCalc() {
   const m = model(); const chart = $('#stChart');
-  if (!m) { drawPayoff(chart, [], {}); $('#stMetrics').replaceChildren(); $('#stGreeks').replaceChildren(); $('#stHeat').replaceChildren(); return; }
+  if (!m) { drawPayoff(chart, [], {}); $('#stExp').textContent = ''; $('#stSlider').hidden = true; $('#stMetrics').replaceChildren(); $('#stGreeks').replaceChildren(); $('#stHeat').replaceChildren(); return; }
   const firstExp = legs.map((l) => l.expiry).sort()[0]; const dleft = Math.max(0, Math.floor(yearsTo(firstExp) * 365));
   const sl = $('#stDays'); sl.max = String(dleft); if (days > dleft) days = dleft; sl.value = String(days); $('#stSlider').hidden = dleft < 1;
   $('#stDaysOut').textContent = days ? `${days} day${days > 1 ? 's' : ''}` : 'today';

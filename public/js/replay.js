@@ -43,8 +43,8 @@ function renderBar() {
   const dayLabel = r.blind ? `Day ${r.day} · ${fmtDay(r.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' })}` : fmtDay(r.date);
   const nx = r.nextExpiry?.[S.symbol];
   const exp = nx ? `${S.meta.indices[S.symbol]?.short || S.symbol} ${nx.kind} expiry ${r.blind ? '' : fmtExpiry(nx.date) + ', '}in ${Math.round(daysTo(nx.date))} day${Math.round(daysTo(nx.date)) === 1 ? '' : 's'}` : '';
-  const btn = (text, title, fn, cls = 'btn ghost sm') => el('button', { class: cls, type: 'button', text, title, disabled: stepping || playing || !r.hasNext, onclick: fn });
-  const play = el('button', { class: 'btn sm' + (playing ? '' : ' ghost'), type: 'button', id: 'rpPlay', text: playing ? 'Pause' : 'Play', title: 'Move forward one trading day at a time until you press Pause. Pauses while an order ticket is open.', disabled: !r.hasNext && !playing, onclick: togglePlay });
+  const btn = (text, title, fn) => el('button', { type: 'button', text, title, disabled: stepping || playing || !r.hasNext, onclick: fn });
+  const play = el('button', { class: 'play' + (playing ? ' on' : ''), type: 'button', id: 'rpPlay', 'aria-pressed': String(playing), text: playing ? 'Pause' : 'Play', title: 'Move forward one trading day at a time until you press Pause. Pauses while an order ticket is open.', disabled: !r.hasNext && !playing, onclick: togglePlay });
   const sp = el('select', { class: 'sel sm', 'aria-label': 'Auto-play speed', title: 'Auto-play speed', onchange: (e) => { speed = +e.target.value; store.set('replaySpeed', speed); } },
     [[4000, 'Slow'], [2000, 'Normal'], [800, 'Fast']].map(([v, t]) => new Option(`${t} (${v / 1000} s a day)`, v, false, v === speed)));
   bar.replaceChildren(
@@ -52,10 +52,12 @@ function renderBar() {
     el('b', { class: 'rp-date', text: dayLabel, title: r.blind ? 'Blind mode: the real date is hidden until you end the session.' : 'Prices are this day\'s closing prices.' }),
     el('span', { class: 'note', text: r.blind ? `${exp}` : `Day ${r.day} of your session${exp ? ' · ' + exp : ''}` }),
     el('span', { class: 'sp' }),
-    btn('+1 day', 'Next trading day (shortcut: N)', () => step('day')),
-    btn('+1 week', 'Jump a week ahead, one trading day at a time', () => step('week')),
-    btn('Next expiry', `Jump to the next ${S.meta.indices[S.symbol]?.short || ''} expiry day. Positions expiring then are settled at that day's close.`, () => step('expiry')),
-    play, sp,
+    el('div', { class: 'transport', role: 'group', 'aria-label': 'Move forward in time' },
+      btn('+1 day', 'Next trading day (shortcut: N)', () => step('day')),
+      btn('+1 week', 'Jump a week ahead, one trading day at a time', () => step('week')),
+      btn('Next expiry', `Jump to the next ${S.meta.indices[S.symbol]?.short || ''} expiry day. Positions expiring then are settled at that day's close.`, () => step('expiry')),
+      play),
+    sp,
     !r.hasNext ? el('span', { class: 'note', text: 'End of downloaded history' }) : '');
 }
 

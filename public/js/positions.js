@@ -46,7 +46,7 @@ function render() {
     stat('Total P&L', srs(a.totalPnl), tone(a.totalPnl), pct(a.totalPnl / a.startBalance * 100) + ' since start'),
     stat('Open P&L', srs(a.unrealized), tone(a.unrealized), 'On positions still open'),
     stat('Booked P&L', srs(a.realized), tone(a.realized), 'From closed and expired trades'),
-    stat('Charges paid', rs(a.charges), '', 'Brokerage, STT, fees, GST, stamp duty'),
+    stat('Charges paid', rs(a.charges), '', chargeSplit(a)),
     stat('Margin blocked', rs(a.margin), '', 'Estimate for sold options'),
     stat('Free to trade', rs(a.available), a.available < 0 ? 'down' : ''),
   );
@@ -80,6 +80,13 @@ function render() {
     el('tbody', {}, a.orders.length ? a.orders.map((x) => el('tr', {}, el('td', { class: 'l', text: fmtWhen(x.t, S.meta.replay) }), el('td', { class: 'l t', text: instrument(x) }),
       el('td', { class: 'l ' + (x.side === 'BUY' ? 'up' : 'down'), text: x.side === 'BUY' ? 'Buy' : 'Sell' }), el('td', { text: String(x.lots) }), el('td', { text: inr2.format(x.price) }), el('td', { text: inr2.format(x.charges) }),
       el('td', { class: tone(x.realized), text: x.realized ? srs(x.realized) : '' }), el('td', { class: 'l t muted wrap', text: [x.tag, x.note].filter(Boolean).join(' · ') }))) : [el('tr', {}, el('td', { class: 'l t empty', colspan: '8', text: 'No orders yet.' }))]));
+}
+
+// Brokerage is what the broker keeps; the rest goes to the government and the exchange.
+function chargeSplit(a) {
+  const p = a.chargeParts; if (!p || !a.charges) return 'Brokerage, STT, exchange fees, GST, stamp duty';
+  const taxes = a.charges - p.brokerage;
+  return `${rs(p.brokerage)} brokerage, ${rs(Math.max(0, taxes))} taxes and fees`;
 }
 
 function renderPayoff() {

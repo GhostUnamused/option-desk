@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js", "--sim", "--port", "4322"],
       "port": 4322
+    },
+    {
+      "name": "option-desk-live",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js", "--port", "4323"],
+      "port": 4323
     }
   ]
 }

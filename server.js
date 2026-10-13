@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NseProvider } from './lib/nse.js';
 import { PaperAccount } from './lib/paper.js';
-import { INDICES, PAPER, RISK_FREE, REPLAY } from './lib/config.js';
+import { INDICES, PAPER, RISK_FREE, REPLAY, CHARGES } from './lib/config.js';
 import * as desktop from './lib/desktop.js';
 import { ReplayEngine } from './lib/replay/engine.js';
 import { ReplayProvider } from './lib/replay/provider.js';
@@ -46,6 +46,7 @@ const sym = (q) => { const s = (q.get('symbol') || 'NIFTY').toUpperCase(); if (!
 
 const routes = {
   'GET /api/meta': async () => ({ provider: provider.name, mock: MOCK, indices: await metaIndices(), paper: { startBalance: MOCK ? REPLAY.startBalance : PAPER.startBalance }, riskFree: replay ? replay.riskFree() : RISK_FREE, app: desktop.info(),
+    charges: { brokers: CHARGES.brokers, perOrder: CHARGES.brokeragePerOrder },
     replay: MOCK ? (replay ? replay.publicState() : { available: false, error: replayError }) : null }),
   'GET /api/indices': async () => ({ ...(await provider.indices()), market: await provider.marketStatus().catch(() => null) }),
   'GET /api/expiries': async (q) => ({ expiries: await provider.expiries(sym(q)) }),
