@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { rebrand } from './exe-resources.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DIST = path.join(ROOT, 'dist');
@@ -47,6 +48,8 @@ const buf = fs.readFileSync(exe);
 const pe = buf.readUInt32LE(0x3c);
 if (buf.toString('latin1', pe, pe + 4) !== 'PE\0\0') throw new Error('Unexpected exe layout');
 buf.writeUInt16LE(2, pe + 24 + 68);
+// Own icon and name (otherwise Explorer and Task Manager show Node.js).
+rebrand(buf, { version: pkg.version, name: 'Option Desk', file: 'OptionDesk.exe', description: 'Option Desk', copyright: 'Paper trading only. Not investment advice.' });
 fs.writeFileSync(exe, buf);
 console.log(`OptionDesk.exe   ${(buf.length / 1048576).toFixed(0)} MB`);
 

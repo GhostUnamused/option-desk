@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Option Desk</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23000'/%3E%3Cpath d='M6 22 L13 14 L18 18 L26 9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='7' fill='%230F0F0F' stroke='%23343434'/%3E%3Cpath d='M6.4 21.1H15' stroke='%23EDEDED' stroke-width='3.2' stroke-linecap='round'/%3E%3Cpath d='M15 21.1L25.6 9.6' stroke='%23089981' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
@@ -26,7 +26,8 @@
   <button role="tab" data-tab="strategy">Strategy builder</button>
   <button role="tab" data-tab="positions">Paper account</button>
   <span class="tabs-sym" id="symLabel"></span>
-  <button class="pill" id="srcPill" type="button" disabled>Connecting</button>
+  <span class="pill" id="srcPill">Connecting</span>
+  <button class="btn ghost sm" id="modeBtn" type="button" hidden></button>
   <button class="pill" id="updPill" type="button" hidden></button>
   <span class="pill" id="mktPill" hidden></span>
   <button class="btn ghost sm help" id="guideBtn" type="button" title="Show the beginner guide on the Markets tab">Beginner guide</button>

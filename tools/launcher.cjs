@@ -3,7 +3,7 @@
 // %LOCALAPPDATA%\OptionDesk\app\<version> unless a newer version is already installed there by the in-app updater,
 // then runs that version's server.js. Paper accounts live in %LOCALAPPDATA%\OptionDesk\data and survive updates.
 // Bump LAUNCHER_VERSION only when this file changes: the updater then also downloads a new exe.
-const LAUNCHER_VERSION = 1;
+const LAUNCHER_VERSION = 2;
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -46,11 +46,13 @@ function unpack(bundle) {
   fs.writeFileSync(path.join(HOME, 'current.json'), JSON.stringify({ version: bundle.version, id: bundle.id }));
 }
 
-// Is Option Desk already running? Then just open another window on it.
+// Is Option Desk already running? Resolves to its /api/meta, or null.
 function running() {
   return new Promise((resolve) => {
-    const req = http.get({ host: '127.0.0.1', port: PORT, path: '/api/meta', timeout: 1500 }, (res) => { res.resume(); resolve(res.statusCode === 200); });
-    req.on('error', () => resolve(false)); req.on('timeout', () => { req.destroy(); resolve(false); });
+    const req = http.get({ host: '127.0.0.1', port: PORT, path: '/api/meta', timeout: 1500 }, (res) => {
+      let s = ''; res.on('data', (d) => { s += d; }).on('end', () => { try { resolve(res.statusCode === 200 ? JSON.parse(s) : null); } catch { resolve(null); } });
+    });
+    req.on('error', () => resolve(null)); req.on('timeout', () => { req.destroy(); resolve(null); });
   });
 }
 
@@ -66,7 +68,10 @@ async function main() {
   const old = process.execPath + '.old';
   const clean = (n) => { try { fs.rmSync(old, { force: true }); } catch { if (n > 0) setTimeout(() => clean(n - 1), 2000).unref(); } };
   clean(15);
-  if (!RESTART && await running()) { openWindow(`http://localhost:${PORT}`); setTimeout(() => process.exit(0), 500); return; }
+  const other = RESTART ? null : await running();
+  // A copy started from the project folder (start.bat / node server.js) has no app features, so don't quietly reuse it.
+  if (other && !(other.app && other.app.packaged)) return fatal(new Error('Option Desk is already running from the project folder (start.bat or node server.js). Close that window, then open the app again.'));
+  if (other) { openWindow(`http://localhost:${PORT}`); setTimeout(() => process.exit(0), 500); return; }
 
   const embedded = JSON.parse(sea.getAsset('app-bundle.json', 'utf8'));
   const current = readJson(path.join(HOME, 'current.json'));

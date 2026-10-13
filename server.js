@@ -10,7 +10,8 @@ import { INDICES, PAPER, RISK_FREE } from './lib/config.js';
 import * as desktop from './lib/desktop.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT) || 4321;
+const portArg = process.argv.indexOf('--port');
+const PORT = Number(portArg > 0 ? process.argv[portArg + 1] : process.env.PORT) || 4321;
 const MOCK = process.env.MOCK === '1' || process.argv.includes('--sim');
 const provider = MOCK ? new MockProvider() : new NseProvider();
 desktop.migrateData();

@@ -4,8 +4,8 @@
     {
       "name": "option-desk-sim",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js", "--sim"],
-      "port": 4321
+      "runtimeArgs": ["server.js", "--sim", "--port", "4322"],
+      "port": 4322
     }
   ]
 }

@@ -4,7 +4,9 @@ A local options workstation for NSE index options: live quotes and charts, a bro
 
 ## Start it
 
-**As an app:** double-click **OptionDesk.exe**. It opens in its own window and needs nothing else installed. It quits by itself when you close the window. Click the **Live NSE / Simulated data** badge to switch markets. When a new version is out, an **Update to …** badge appears; click it to install. Your paper account is kept.
+**As an app:** double-click **OptionDesk.exe**. It opens in its own window and needs nothing else installed. It quits by itself when you close the window. Use the **Switch to simulated / Switch to live prices** button next to the data badge to change markets. When a new version is out, an **Update to …** badge appears; click it to install. Your paper account is kept.
+
+The first time, Windows SmartScreen may say "Windows protected your PC" because the app is not code-signed. Click **More info**, then **Run anyway**. Updates installed from inside the app do not trigger this again.
 
 **From source:**
 

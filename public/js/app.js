@@ -134,9 +134,11 @@ function initDesktop() {
   const app = S.meta.app;
   $('#appVer').textContent = `Option Desk ${app.version}. `;
   if (!app.packaged) return;
-  const src = $('#srcPill');
-  src.disabled = false;
-  src.addEventListener('click', async () => {
+  const mode = $('#modeBtn');
+  mode.hidden = false;
+  mode.textContent = S.meta.mock ? 'Switch to live prices' : 'Switch to simulated';
+  mode.title = S.meta.mock ? 'Use real NSE prices and your main paper account' : 'Practise on a made-up market (works when NSE is closed or unreachable), with a separate paper account';
+  mode.addEventListener('click', async () => {
     const toSim = !S.meta.mock;
     const msg = toSim
       ? 'Switch to the simulated market? Prices become made-up and you trade in a separate practice account. Option Desk restarts in a few seconds.'
@@ -163,7 +165,6 @@ async function pollQuotes() {
     S.quotes = await api('/api/indices');
     const src = $('#srcPill');
     src.className = 'pill ' + (S.meta.mock ? 'warn' : 'ok'); src.textContent = S.meta.mock ? 'Simulated data' : 'Live NSE';
-    if (!src.disabled) src.title = S.meta.mock ? 'Click to switch to live NSE prices' : 'Click to switch to the simulated market';
     renderTickers(); emit('quotes', S.quotes);
   } catch (e) {
     const src = $('#srcPill'); src.className = 'pill bad'; src.textContent = 'Data offline'; src.title = e.message;
