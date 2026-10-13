@@ -164,8 +164,9 @@ async function waitForRestart(done, close) {
   toast('Option Desk did not come back. Open it again from its shortcut.', 'err');
 }
 
-async function checkUpdate() {
-  const u = await api('/api/update').catch(() => null); const b = $('#updPill');
+// A newly opened window asks GitHub afresh (force); after that the server's 15-minute memory is enough.
+async function checkUpdate(force = false) {
+  const u = await api('/api/update' + (force ? '?force=1' : '')).catch(() => null); const b = $('#updPill');
   if (!u?.available) { b.hidden = true; return; }
   b.hidden = false; b.className = 'pill ok'; b.textContent = u.latest === u.current ? 'Update available' : `Update to ${u.latest}`; b.dataset.version = u.latest; b.dataset.big = u.needsNewExe ? '1' : '';
   b.title = (u.notes ? u.notes + '. ' : '') + (u.needsNewExe ? 'This update replaces the app file (about 100 MB).' : 'Small download.') + ' Your paper account is kept.';
@@ -202,7 +203,7 @@ function initDesktop() {
   });
   const updated = store.get('updatedTo', null);
   if (updated) { store.set('updatedTo', null); if (updated === app.version) toast(`Updated to Option Desk ${app.version}.`); }
-  if (app.updates) { checkUpdate(); setInterval(checkUpdate, 3 * 3600e3); }
+  if (app.updates) { checkUpdate(true); setInterval(() => checkUpdate(), 30 * 60e3); }
   const id = Math.random().toString(36).slice(2);
   // If the app underneath was updated or switched while this window stayed open, reload so the page matches it.
   const ping = () => api('/api/ping?c=' + id, {}).then((r) => { if (r.version && (r.version !== app.version || r.mock !== S.meta.mock)) location.reload(); }).catch(() => {});
