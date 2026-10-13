@@ -86,6 +86,12 @@ function addBlank() {
 }
 
 export async function show() {
+  // Saved legs whose expiry has passed (or, in replay, belongs to another day) can't be priced: start again from the preset.
+  if (legs.length) {
+    await loadExpiries(legs[0].symbol).catch(() => {});
+    const open = S.expiries[legs[0].symbol] || [];
+    if (open.length && legs.some((l) => !open.includes(l.expiry))) { legs = []; save(); toast('The saved strategy\'s expiry is over, so it was rebuilt on the nearest expiry.'); }
+  }
   if (!legs.length) { await loadPreset(PRESET[preset] ? preset : 'bull_call').catch((e) => toast(e.message, 'err')); return; }
   renderAll();
 }

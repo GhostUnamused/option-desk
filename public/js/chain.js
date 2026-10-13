@@ -31,7 +31,7 @@ export function init(sec) {
       el('span', {}, el('i', { class: 'sw', style: { background: 'var(--itm)', outline: '1px solid var(--line)' } }), term('In the money', 'itm'), ' (worth something if it expired now)'),
       el('span', {}, el('i', { class: 'sw', style: { background: 'var(--accent)' } }), term('At the money', 'atm strike'), ' strike, closest to the index'),
       el('span', {}, el('i', { class: 'sw', style: { background: 'var(--down)', opacity: '.35' } }), 'Bar behind OI shows how many contracts are open')),
-    el('p', { class: 'note', text: 'How to trade: hover a price and press B to buy or S to sell (on a phone, tap the buttons under the price). Click a price first to see its chart and Greeks. Buys fill at the ask, sells at the bid.' }),
+    el('p', { class: 'note', text: 'How to trade: hover a price and press B to buy or S to sell (on a phone, tap the buttons under the price). Click a price first to see its chart and Greeks. ' + (S.meta.replay ? 'Prices are that day\'s closes. Buys fill a little above the close and sells a little below (slippage); faded prices did not trade that day and cannot be filled.' : 'Buys fill at the ask, sells at the bid.') }),
     el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Where writers are positioned' }), el('span', { class: 'sp' }), oiSeg),
       el('div', { class: 'legend', style: { marginBottom: '6px' } }, el('span', {}, el('i', { class: 'sw', style: { background: 'var(--down)' } }), 'Calls (a ceiling: writers bet against a rise)'), el('span', {}, el('i', { class: 'sw', style: { background: 'var(--up)' } }), 'Puts (a floor: writers bet against a fall)')), oiBox),
   );
@@ -91,7 +91,7 @@ function render() {
         const oiTd = td(compact.format(o.oi), t === 'CE' ? 'ce-oi' : 'pe-oi'); oiTd.prepend(el('span', { class: 'oibar', style: { width: `${(o.oi / maxOi) * 100}%` } }));
         const iv = o.iv > 0 ? o.iv : atmIv;
         const delta = bs(t, spot, row.strike, T, r, iv / 100).delta;
-        const ltp = el('td', { class: (itm ? 'itm ' : '') + `ltp act ${t === 'CE' ? 'ce-ltp' : 'pe-ltp'}`, title: 'Click for chart and Greeks', onclick: (e) => { if (!e.target.closest('.bs')) drawer.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t }); } },
+        const ltp = el('td', { class: (itm ? 'itm ' : '') + `ltp act ${t === 'CE' ? 'ce-ltp' : 'pe-ltp'}` + (o.traded === false ? ' notraded' : ''), title: o.traded === false ? 'No trades in this option on this day, so it cannot be bought or sold in replay. The price shown is NSE\'s settlement estimate.' : 'Click for chart and Greeks', onclick: (e) => { if (!e.target.closest('.bs')) drawer.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t }); } },
           el('span', { text: inr2.format(o.ltp) }), el('span', { class: 'chg ' + tone(o.chg), text: pct(o.pchg || (o.ltp - o.chg ? (o.chg / (o.ltp - o.chg)) * 100 : 0), 1) }),
           el('span', { class: 'bs' }, el('button', { class: 'b', type: 'button', title: 'Buy', text: 'B', onclick: () => ticket.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t, side: 'BUY' }) }), el('button', { class: 's', type: 'button', title: 'Sell', text: 'S', onclick: () => ticket.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t, side: 'SELL' }) })));
         cells.push(oiTd);
@@ -120,7 +120,7 @@ function render() {
   const straddle = (atm.ce?.ltp || 0) + (atm.pe?.ltp || 0);
   const stat = (k, v, s) => el('div', { class: 'stat' }, el('div', { class: 'k' }, term(k)), el('div', { class: 'v', text: v }), s ? el('div', { class: 's', text: s }) : null);
   statsBox.replaceChildren(
-    stat('Spot', inr2.format(spot), c.timestamp ? `NSE time ${String(c.timestamp).split(' ').pop()}` : ''),
+    stat('Spot', inr2.format(spot), c.timestamp ? `NSE time ${String(c.timestamp).split(' ').pop()}` : S.meta.replay ? 'Index close that day' : ''),
     stat('ATM strike', inr0.format(atm.strike), `Straddle ₹${inr2.format(straddle)}`),
     stat('ATM implied vol', atmIv.toFixed(1) + '%', `Expected move ±${pts(spot * atmIv / 100 * Math.sqrt(T))}`),
     stat('Put–call ratio', tot.ce ? (tot.pe / tot.ce).toFixed(2) : '—', tot.ce ? (tot.pe > tot.ce ? 'More puts open than calls' : 'More calls open than puts') : ''),

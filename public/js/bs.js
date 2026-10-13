@@ -1,5 +1,10 @@
 // Black–Scholes pricing and Greeks, shared by the server and the browser.
 
+// "Now" for time-to-expiry. The browser points it at the replay date's close in replay mode.
+let clock = () => Date.now();
+export const setClock = (fn) => { clock = fn; };
+export const now = () => clock();
+
 const SQ2PI = Math.sqrt(2 * Math.PI);
 export const npdf = (x) => Math.exp(-x * x / 2) / SQ2PI;
 
@@ -47,7 +52,7 @@ export function impliedVol(type, S, K, T, r, price) {
 export const intrinsic = (type, S, K) => Math.max(type === 'CE' ? S - K : K - S, 0);
 
 // Years until expiry (expiry at 15:30 IST on the given YYYY-MM-DD).
-export function yearsTo(expiryISO, now = Date.now()) {
+export function yearsTo(expiryISO, t = now()) {
   const end = Date.parse(expiryISO + 'T15:30:00+05:30');
-  return Math.max((end - now) / (365 * 864e5), 0);
+  return Math.max((end - t) / (365 * 864e5), 0);
 }

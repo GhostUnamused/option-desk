@@ -8,9 +8,13 @@ import * as chain from './chain.js';
 import * as strategy from './strategy.js';
 import * as positions from './positions.js';
 import * as ticket from './ticket.js';
+import * as replay from './replay.js';
 import { closeDrawer } from './drawer.js';
 
 const TABS = { learn, markets, chain, strategy, positions };
+// Replay mode before any session: only the lessons and the Replay tab have anything to show.
+const replayIdle = () => Boolean(S.meta?.replay && !S.meta.replay.date); // ended sessions stay viewable; the server refuses their orders
+const NEEDS_MARKET = ['markets', 'chain', 'strategy', 'positions'];
 let lastQuote = {};
 
 // One plain sentence at the top of each tab saying what it is for.
@@ -73,7 +77,7 @@ function renderTickers() {
     lastQuote[i.symbol] = i.last;
   }
   const m = q.market, mp = $('#mktPill');
-  if (m) { mp.hidden = false; mp.className = 'pill ' + (m.open ? 'ok live' : 'warn'); mp.replaceChildren(el('span', { class: 'dot' }), m.open ? 'Market open' : 'Market closed'); mp.title = m.message || ''; }
+  if (m && !m.replay) { mp.hidden = false; mp.className = 'pill ' + (m.open ? 'ok live' : 'warn'); mp.replaceChildren(el('span', { class: 'dot' }), m.open ? 'Market open' : 'Market closed'); mp.title = m.message || ''; }
   $('#symLabel').textContent = `${S.meta.indices[S.symbol].name} · lot ${S.meta.indices[S.symbol].lot}`;
   tickerFades();
 }
@@ -109,7 +113,7 @@ function initTickerStrip() {
 
 function renderAcctMini() {
   const a = S.account; if (!a) return;
-  $('#acctMini').replaceChildren(el('span', { class: 'k', text: 'Paper account' }), el('span', { class: 'v' }, el('span', { text: rs(a.available) + ' free · ' }), el('span', { class: tone(a.totalPnl), text: srs(a.totalPnl) })));
+  $('#acctMini').replaceChildren(el('span', { class: 'k', text: S.meta.replay ? 'Replay account' : 'Paper account' }), el('span', { class: 'v' }, el('span', { text: rs(a.available) + ' free · ' }), el('span', { class: tone(a.totalPnl), text: srs(a.totalPnl) })));
 }
 
 // Desktop app (OptionDesk.exe): version, live/simulated switch, updates, and telling the app when this window closes.
@@ -146,15 +150,16 @@ function initDesktop() {
   if (!app.packaged) return;
   const mode = $('#modeBtn');
   mode.hidden = false;
-  mode.textContent = S.meta.mock ? 'Switch to live prices' : 'Switch to simulated';
-  mode.title = S.meta.mock ? 'Use real NSE prices and your main paper account' : 'Practise on a made-up market (works when NSE is closed or unreachable), with a separate paper account';
+  mode.textContent = S.meta.mock ? 'Switch to live prices' : 'Switch to replay';
+  mode.title = S.meta.mock ? 'Use real NSE prices and your main paper account' : 'Practise on real past days, one day at a time (works when the market is closed), with a separate replay balance';
   mode.addEventListener('click', async () => {
     const toSim = !S.meta.mock;
     const msg = toSim
-      ? 'Switch to the simulated market? Prices become made-up and you trade in a separate practice account. Option Desk restarts in a few seconds.'
-      : 'Switch back to live NSE prices? Option Desk restarts in a few seconds.';
+      ? 'Switch to replay? You practise on real past days at their closing prices, with a separate replay balance. Option Desk restarts in a few seconds.'
+      : 'Switch back to live NSE prices? Your replay session is kept for next time. Option Desk restarts in a few seconds.';
     if (!confirm(msg)) return;
-    const close = busy(toSim ? 'Switching to the simulated market' : 'Switching to live NSE prices', 'Option Desk is restarting. This page reloads by itself in a few seconds.');
+    replay.stopPlay();
+    const close = busy(toSim ? 'Switching to replay' : 'Switching to live NSE prices', 'Option Desk is restarting. This page reloads by itself in a few seconds.');
     await api('/api/restart', { sim: toSim }).catch(() => {});
     waitForRestart((m) => m.app.started !== app.started && m.mock === toSim, close);
   });
@@ -179,10 +184,12 @@ function initDesktop() {
 }
 
 async function pollQuotes() {
+  const src = $('#srcPill');
+  if (replayIdle()) { src.className = 'pill warn'; src.textContent = 'Replay: not started'; return; }
   try {
     S.quotes = await api('/api/indices');
-    const src = $('#srcPill');
-    src.className = 'pill ' + (S.meta.mock ? 'warn' : 'ok'); src.textContent = S.meta.mock ? 'Simulated data' : 'Live NSE';
+    src.className = 'pill ' + (S.meta.mock ? 'warn' : 'ok'); src.textContent = S.meta.mock ? 'Historical replay' : 'Live NSE';
+    src.title = S.meta.mock ? 'Prices are the closing prices of a past trading day' : '';
     renderTickers(); emit('quotes', S.quotes);
   } catch (e) {
     const src = $('#srcPill'); src.className = 'pill bad'; src.textContent = 'Data offline'; src.title = e.message;
@@ -190,7 +197,8 @@ async function pollQuotes() {
 }
 
 function showTab(name) {
-  if (!TABS[name]) name = 'markets';
+  if (!TABS[name]) name = S.meta?.replay && replayIdle() ? 'replay' : 'markets';
+  if (replayIdle() && NEEDS_MARKET.includes(name)) name = 'replay';
   S.tab = name;
   closeDrawer();
   for (const [k, mod] of Object.entries(TABS)) {
@@ -213,11 +221,12 @@ async function boot() {
   try { S.meta = await api('/api/meta'); }
   catch (e) { document.querySelector('main').replaceChildren(el('div', { class: 'panel empty', text: 'Could not reach the Option Desk server. Open Option Desk again (or run "node server.js") and reload this page.' })); return; }
   if (!S.meta.indices[S.symbol]) S.symbol = 'NIFTY';
+  if (S.meta.replay) initReplay();
   ticket.init();
   initGlossary();
   initTickerStrip();
   initDesktop();
-  for (const [k, mod] of Object.entries(TABS)) { const sec = $('#tab-' + k); sec.append(intro(k)); mod.init?.(sec); }
+  for (const [k, mod] of Object.entries(TABS)) { const sec = $('#tab-' + k); if (INTROS[k]) sec.append(intro(k)); mod.init?.(sec); }
   $('#tab-markets').prepend(guide());
   $('#guideBtn').addEventListener('click', () => { $('#guide').hidden = false; store.set('guideHidden', false); showTab('markets'); scrollTo({ top: 0, behavior: 'smooth' }); });
   const top = $('.top'); new ResizeObserver(() => document.documentElement.style.setProperty('--top-h', top.offsetHeight + 'px')).observe(top);
@@ -229,14 +238,31 @@ async function boot() {
   on('goto', (t) => showTab(t));
 
   await pollQuotes();
-  await loadExpiries().catch((e) => toast(`Could not load expiries: ${e.message}`, 'err'));
-  refreshAccount().catch(() => {});
+  if (!replayIdle()) {
+    await loadExpiries().catch((e) => toast(`Could not load expiries: ${e.message}`, 'err'));
+    refreshAccount().catch(() => {});
+  }
   showTab(location.hash.slice(1) || 'markets');
 
   every(5000, pollQuotes);
   every(5000, () => TABS[S.tab].tick?.());
-  every(8000, () => (S.tab !== 'positions' ? refreshAccount() : null));
+  every(8000, () => (S.tab !== 'positions' && !replayIdle() ? refreshAccount() : null));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollQuotes(); TABS[S.tab].tick?.(); } });
+}
+
+// Replay mode: a Replay tab and control bar, a clock set to the replay day, and a full refresh whenever the day changes.
+function initReplay() {
+  TABS.replay = replay;
+  $('.tabs [data-tab="replay"]').hidden = false;
+  $('.tabs [data-tab="positions"]').textContent = 'Replay account';
+  for (const k of NEEDS_MARKET) if (replayIdle()) { const b = $(`.tabs [data-tab="${k}"]`); b.classList.add('off'); b.title = 'Start a replay session in the Replay tab first'; }
+  on('day', async () => {
+    await pollQuotes();
+    await loadExpiries().catch(() => {});
+    emit('expiries');
+    await refreshAccount().catch(() => {});
+    TABS[S.tab].show?.();
+  });
 }
 
 boot();

@@ -2,13 +2,15 @@
 import { api, el, $, inr2, inr0, pct, tone, pts, themeColors, stdev, sma, fmtExpiry, daysTo, compact, vixMood } from './util.js';
 import { term } from './glossary.js';
 import { S, on, cfg, quote, loadChain, analysisExpiry, loadExpiries } from './state.js';
-import { yearsTo } from './bs.js';
+import { yearsTo, now } from './bs.js';
 
 let root, chart, series = [], range = '1D', dailyCache = new Map(), lastDraw = 0, readBox, tableBox;
 
 export function init(sec) {
   root = sec;
-  const ranges = ['1D', '1M', '3M', '6M', '1Y'];
+  // Replay has daily prices only, so no intraday view.
+  const ranges = S.meta.replay ? ['1M', '3M', '6M', '1Y'] : ['1D', '1M', '3M', '6M', '1Y'];
+  if (S.meta.replay) range = '3M';
   const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Chart range' }, ranges.map((r) => el('button', { type: 'button', 'data-r': r, class: r === range ? 'on' : '', text: r, onclick: () => { range = r; seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.r === r)); draw(true); } })));
   const head = el('div', { class: 'panel-h' },
     el('div', {}, el('h2', { id: 'mkName' }), el('div', {}, el('span', { class: 'big', id: 'mkLast', text: '—' }), ' ', el('span', { id: 'mkChg', class: 'mono' }))),
@@ -26,6 +28,7 @@ export function init(sec) {
   on('quotes', () => { if (S.tab === 'markets') { renderHead(); renderTable(); if (range === '1D') liveTick(); } });
   on('symbol', () => { if (S.tab === 'markets') { draw(true); renderHead(); } });
   on('expiries', () => { if (S.tab === 'markets') renderRead(); });
+  on('day', () => dailyCache.clear());
 }
 
 export function show() { if (!chart) makeChart(); renderHead(); renderTable(); draw(true); renderRead(); }
@@ -74,7 +77,7 @@ async function draw(reset) {
       if (sym !== S.symbol || range === '1D') return;
       clearSeries();
       const closes = rows.map((r) => r.c); const s20 = sma(closes, 20), s50 = sma(closes, 50);
-      const cutoff = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+      const cutoff = new Date(now() - days * 864e5).toISOString().slice(0, 10);
       const idx = rows.map((r, i) => [r, i]).filter(([r]) => r.date >= cutoff);
       const cs = chart.addCandlestickSeries({ upColor: c.up, downColor: c.down, borderVisible: false, wickUpColor: c.up, wickDownColor: c.down });
       cs.setData(idx.map(([r]) => ({ time: r.date, open: r.o, high: r.h, low: r.l, close: r.c })));
@@ -84,7 +87,7 @@ async function draw(reset) {
       l50.setData(idx.filter(([, i]) => s50[i] != null).map(([r, i]) => ({ time: r.date, value: s50[i] })));
       series.push(cs, l20, l50); chart.applyOptions({ timeScale: { timeVisible: false } });
       chart.timeScale().fitContent();
-      legend.replaceChildren(el('span', {}, el('i', { class: 'sw', style: { background: c.accent } }), '20-day average'), el('span', {}, el('i', { class: 'sw', style: { background: c.warn } }), '50-day average'), el('span', { text: 'Daily candles: green closed higher than it opened, red lower' }));
+      legend.replaceChildren(el('span', {}, el('i', { class: 'sw', style: { background: c.accent } }), '20-day average'), el('span', {}, el('i', { class: 'sw', style: { background: c.warn } }), '50-day average'), el('span', { text: 'Daily candles: green closed higher than it opened, red lower' + (S.meta.replay && idx.length < days * 0.6 * 5 / 7 ? '. Only part of this range is downloaded.' : '') }));
     }
     lastDraw = Date.now();
   } catch (e) { legend.replaceChildren(el('span', { class: 'down', text: `Chart unavailable: ${e.message}` })); }
@@ -154,7 +157,7 @@ async function renderRead() {
     const row = (k, v, sub, cls = '') => el('div', { class: 'row' }, el('span', { class: 'k' }, term(k)), el('span', { class: 'v ' + cls }, v, sub ? el('small', { text: sub }) : null));
     const dayPos = q.high > q.low ? Math.round((q.last - q.low) / (q.high - q.low) * 100) : 50;
     const sum = [];
-    sum.push(`${cfg(sym).short} is in ${trend[0] === 'Mixed' ? 'no clear trend' : 'an ' + trend[0].toLowerCase()} and trading in the ${dayPos > 66 ? 'top' : dayPos < 33 ? 'bottom' : 'middle'} of today's range.`);
+    sum.push(`${cfg(sym).short} is in ${trend[0] === 'Mixed' ? 'no clear trend' : (trend[0] === 'Uptrend' ? 'an uptrend' : 'a downtrend')} and trading in the ${dayPos > 66 ? 'top' : dayPos < 33 ? 'bottom' : 'middle'} of today's range.`);
     if (vixNow != null) sum.push(`India VIX at ${vixNow.toFixed(2)} says the market mood is ${mood}${vixPct != null ? ` (higher than ${vixPct}% of the past year)` : ''}.`);
     if (iv && move) sum.push(`Options price a move of about ±${pts(move)} points by ${fmtExpiry(exp)}.`);
     if (rich != null) sum.push(rich > 1.5 ? 'Options look expensive against recent movement, which favours sellers.' : rich < -1.5 ? 'Options look cheap against recent movement, which favours buyers.' : 'Options are priced roughly in line with recent movement.');

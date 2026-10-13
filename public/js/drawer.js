@@ -28,7 +28,7 @@ export function open(leg) {
     ));
   if (chart) { chart.remove(); chart = null; }
   const c = themeColors();
-  chart = LightweightCharts.createChart($('#drChart'), { autoSize: true, layout: { attributionLogo: false, background: { type: 'solid', color: c.bg }, textColor: c.muted, fontFamily: 'Inter, Segoe UI, system-ui, sans-serif', fontSize: 11 }, grid: { vertLines: { visible: false }, horzLines: { color: c.grid } }, rightPriceScale: { borderColor: c.line }, timeScale: { borderColor: c.line, timeVisible: true } });
+  chart = LightweightCharts.createChart($('#drChart'), { autoSize: true, layout: { attributionLogo: false, background: { type: 'solid', color: c.bg }, textColor: c.muted, fontFamily: 'Inter, Segoe UI, system-ui, sans-serif', fontSize: 11 }, grid: { vertLines: { visible: false }, horzLines: { color: c.grid } }, rightPriceScale: { borderColor: c.line }, timeScale: { borderColor: c.line, timeVisible: !S.meta.replay } });
   ser = chart.addAreaSeries({ lineColor: c.accent, topColor: hexA(c.accent, .25), bottomColor: hexA(c.accent, .02), lineWidth: 2 });
   update(true);
   clearInterval(timer); timer = setInterval(() => !document.hidden && update(false), 5000);
@@ -52,7 +52,7 @@ async function update(first) {
     const g = bs(leg.type, c.spot, leg.strike, T, S.meta.riskFree, iv);
     const kv = (k, v) => [el('span', { class: 'k' }, term(k)), el('span', { class: 'v', text: v })];
     const be = leg.type === 'CE' ? leg.strike + o.ltp : leg.strike - o.ltp;
-    $('#drKv').replaceChildren(...kv('Bid / ask', `${inr2.format(o.bid)} / ${inr2.format(o.ask)}`), ...kv('Implied vol', o.iv > 0 ? o.iv.toFixed(2) + '%' : 'not reported'), ...kv('Open interest', `${inr0.format(o.oi)} (${o.chgOi >= 0 ? '+' : ''}${compact.format(o.chgOi)} today)`), ...kv('Volume', inr0.format(o.vol)),
+    $('#drKv').replaceChildren(...kv(S.meta.replay ? 'Sell / buy fill' : 'Bid / ask', `${inr2.format(o.bid)} / ${inr2.format(o.ask)}`), ...kv('Implied vol', o.iv > 0 ? o.iv.toFixed(2) + '%' : 'not reported'), ...kv('Open interest', `${inr0.format(o.oi)} (${o.chgOi >= 0 ? '+' : ''}${compact.format(o.chgOi)} today)`), ...kv('Volume', inr0.format(o.vol) + (S.meta.replay && !o.vol ? ' (cannot trade today)' : '')),
       ...kv('Spot', inr2.format(c.spot)), ...kv('Cost of one lot', `${rs(o.ask * lot)} to buy`), ...kv('Breakeven at expiry (buyer)', inr2.format(be)), ...kv('Model price at this IV', '₹' + inr2.format(g.price)));
     $('#drGreeks').replaceChildren(...kv('Delta (per lot)', `${srs(g.delta * lot)} per point · ${g.delta.toFixed(2)}`), ...kv('Theta (per lot)', `${srs(g.theta * lot)} per day`), ...kv('Vega (per lot)', `${srs(g.vega * lot)} per vol point`), ...kv('Gamma', g.gamma.toFixed(5)));
     if (first || ++n % 2 === 0) {
@@ -60,7 +60,7 @@ async function update(first) {
       if (leg !== cur) return;
       ser.setData(d.points.map((p) => ({ time: p.t, value: p.v })));
       if (first) chart.timeScale().fitContent();
-      $('#drChartNote').textContent = d.points.length ? 'Today\'s traded price for this option.' : 'No trades yet today for this option.';
+      $('#drChartNote').textContent = d.daily ? 'This option\'s daily price up to this day.' : d.points.length ? 'Today\'s traded price for this option.' : 'No trades yet today for this option.';
     }
   } catch (e) { $('#drChartNote').textContent = `Could not update: ${e.message}`; }
 }

@@ -1,5 +1,5 @@
 // Paper account tab: balances, open positions with live P&L, portfolio payoff, equity curve, orders, reset.
-import { api, el, $, inr0, inr2, rs, srs, pct, tone, instrument, fmtTime, fmtLeft, toast, themeColors } from './util.js';
+import { api, el, $, inr0, inr2, rs, srs, pct, tone, instrument, fmtWhen, fmtLeft, toast, themeColors } from './util.js';
 import { term } from './glossary.js';
 import { S, on, emit, cfg, refreshAccount } from './state.js';
 import { bs, yearsTo } from './bs.js';
@@ -11,15 +11,15 @@ let root, eqChart = null, eqSeries = null, group = null, resetArmed = false;
 export function init(sec) {
   root = sec;
   root.append(
-    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Paper account' }), el('span', { class: 'note', id: 'acSince' })), el('div', { class: 'grid', id: 'acStats' })),
-    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Open positions' }), el('span', { class: 'sp' }), el('span', { class: 'note', text: 'Marked at the live bid–ask midpoint. Refreshes every 5 s.' }), el('button', { class: 'btn danger sm', type: 'button', id: 'acExitAll', text: 'Exit all', onclick: exitAll })),
+    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: S.meta.replay ? 'Replay account' : 'Paper account' }), el('span', { class: 'note', id: 'acSince' })), el('div', { class: 'grid', id: 'acStats' })),
+    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Open positions' }), el('span', { class: 'sp' }), el('span', { class: 'note', text: S.meta.replay ? 'Marked at the day\'s closing price.' : 'Marked at the live bid–ask midpoint. Refreshes every 5 s.' }), el('button', { class: 'btn danger sm', type: 'button', id: 'acExitAll', text: 'Exit all', onclick: exitAll })),
       el('div', { class: 'tw' }, el('table', { id: 'acPos' }))),
     el('div', { class: 'cols' },
       el('div', { class: 'panel', id: 'acPayPanel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'What your positions do at expiry' }), el('span', { class: 'sp' }), el('select', { class: 'sel', id: 'acGroup', 'aria-label': 'Position group', onchange: (e) => { group = e.target.value; renderPayoff(); } })),
         payoffLegend('Today'), el('div', { class: 'svgchart', id: 'acPayoff', style: { marginTop: '8px' } })),
       el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Account value over time' })), el('div', { class: 'chart', id: 'acEq', style: { height: '260px' } }), el('p', { class: 'note', id: 'acEqNote', style: { marginTop: '6px' } }))),
     el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Order history' })), el('div', { class: 'tw', style: { maxHeight: '420px' } }, el('table', { id: 'acOrders' }))),
-    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Start over' }), el('span', { class: 'note', text: 'Closes everything and resets your dummy balance. This cannot be undone.' })),
+    S.meta.replay ? '' : el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Start over' }), el('span', { class: 'note', text: 'Closes everything and resets your dummy balance. This cannot be undone.' })),
       el('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' } },
         el('label', { class: 'f', for: 'acBal' }, 'Starting balance (₹)', el('input', { class: 'inp', id: 'acBal', type: 'number', step: '50000', min: '10000', value: '500000' })),
         el('button', { class: 'btn danger', type: 'button', id: 'acReset', text: 'Reset account', onclick: reset }))),
@@ -40,7 +40,7 @@ function makeEq() {
 function render() {
   const a = S.account; if (!a) return;
   const stat = (k, v, cls, s) => el('div', { class: 'stat' }, el('div', { class: 'k' }, term(k)), el('div', { class: 'v ' + (cls || ''), text: v }), s ? el('div', { class: 's', text: s }) : null);
-  $('#acSince').textContent = `Started ${fmtTime(Date.parse(a.createdAt))} with ${rs(a.startBalance)}`;
+  $('#acSince').textContent = `Started ${fmtWhen(Date.parse(a.createdAt), S.meta.replay)} with ${rs(a.startBalance)}`;
   $('#acStats').replaceChildren(
     stat('Account value', rs(a.equity), '', 'Cash plus what your positions are worth now'),
     stat('Total P&L', srs(a.totalPnl), tone(a.totalPnl), pct(a.totalPnl / a.startBalance * 100) + ' since start'),
@@ -73,13 +73,13 @@ function render() {
   const pts = []; for (const e of a.equityCurve) { const tt = Math.floor(e.t / 1000) + 19800; if (pts.length && pts[pts.length - 1].time >= tt) continue; pts.push({ time: tt, value: e.v }); }
   eqSeries.setData(pts); eqChart.timeScale().fitContent();
   eqSeries.applyOptions({ lineColor: a.equity >= a.startBalance ? themeColors().up : themeColors().down });
-  $('#acEqNote').textContent = `${pts.length} snapshots, recorded after every order and every few minutes while the app is open.`;
+  $('#acEqNote').textContent = S.meta.replay ? `One point per replay day (${pts.length} so far), at each day's close.` : `${pts.length} snapshots, recorded after every order and every few minutes while the app is open.`;
   // Orders
   const o = $('#acOrders');
   o.replaceChildren(el('thead', {}, el('tr', {}, ['Time', 'Instrument', 'Side', 'Lots', 'Price', 'Charges', 'Booked P&L', 'Note'].map((h, i) => el('th', { class: i < 3 || i === 7 ? 'l' : '' }, term(h))))),
-    el('tbody', {}, a.orders.length ? a.orders.map((x) => el('tr', {}, el('td', { class: 'l', text: fmtTime(x.t) }), el('td', { class: 'l t', text: instrument(x) }),
+    el('tbody', {}, a.orders.length ? a.orders.map((x) => el('tr', {}, el('td', { class: 'l', text: fmtWhen(x.t, S.meta.replay) }), el('td', { class: 'l t', text: instrument(x) }),
       el('td', { class: 'l ' + (x.side === 'BUY' ? 'up' : 'down'), text: x.side === 'BUY' ? 'Buy' : 'Sell' }), el('td', { text: String(x.lots) }), el('td', { text: inr2.format(x.price) }), el('td', { text: inr2.format(x.charges) }),
-      el('td', { class: tone(x.realized), text: x.realized ? srs(x.realized) : '' }), el('td', { class: 'l t muted', text: x.tag || '' }))) : [el('tr', {}, el('td', { class: 'l t empty', colspan: '8', text: 'No orders yet.' }))]));
+      el('td', { class: tone(x.realized), text: x.realized ? srs(x.realized) : '' }), el('td', { class: 'l t muted wrap', text: [x.tag, x.note].filter(Boolean).join(' · ') }))) : [el('tr', {}, el('td', { class: 'l t empty', colspan: '8', text: 'No orders yet.' }))]));
 }
 
 function renderPayoff() {

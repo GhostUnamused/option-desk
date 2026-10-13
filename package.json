@@ -1,20 +1,18 @@
 {
   "name": "option-desk",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Local NIFTY index options desk: live chains, charts, strategy builder and paper trading.",
+  "description": "Local NSE index options desk: live chains, charts, strategy builder, paper trading and a historical replay.",
   "scripts": {
     "start": "node server.js",
     "sim": "node server.js --sim",
+    "test": "node --test \"test/*.test.js\"",
     "build": "node tools/build.mjs",
     "release": "node tools/release.mjs"
   },
   "engines": {
-    "node": ">=18.17"
-  },
-  "dependencies": {
-    "playwright": "^1.64.0"
+    "node": ">=22.13"
   },
   "updates": {
     "github": "GhostUnamused/option-desk"

@@ -48,6 +48,9 @@ export function setSymbol(symbol) {
   emit('symbol', symbol);
 }
 
+// Replay moved to another day: forget everything priced on the old one.
+export function newDay() { S.expiries = {}; S.chains.clear(); emit('day'); }
+
 export async function refreshAccount() {
   S.account = await api('/api/account');
   emit('account', S.account);

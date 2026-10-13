@@ -62,6 +62,16 @@ export const GLOSSARY = {
   '52-week range': 'The lowest and highest levels of the past year. The marker shows where the index is now.',
   "today's range": 'The lowest and highest levels traded so far today.',
   'trend':'Direction of the index, judged by its 20-day and 50-day average prices.',
+  // Replay
+  'replay day': 'The day in history you are trading. Every price on screen is from that day\'s close or earlier.',
+  'risk-free rate': 'The interest rate on safe money (like a treasury bill). It goes into the Black–Scholes formula used to work out implied volatility and the Greeks.',
+  'win rate': 'Out of the trades you closed (or that settled at expiry), how many made money.',
+  'best day': 'The day your account gained the most.',
+  'worst day': 'The day your account lost the most.',
+  'largest drop': 'The biggest fall from a high point of your account to a later low (traders call it drawdown). It shows how bad it felt along the way.',
+  'trading days': 'Days NSE was open. Weekends and holidays are skipped.',
+  'sell / buy fill': 'In replay you sell a little below the day\'s close and buy a little above it. The gap is slippage: wider for strikes far from the index and for ones that barely traded.',
+  'slippage': 'The difference between the quoted price and the price you actually get. It is a real cost of trading, largest in options that rarely trade.',
 };
 
 // "Delta (per lot)" and "Implied vol (ATM)" fall back to their base term.

@@ -31,6 +31,7 @@
   <button role="tab" data-tab="chain">Option chain</button>
   <button role="tab" data-tab="strategy">Strategy builder</button>
   <button role="tab" data-tab="positions">Paper account</button>
+  <button role="tab" data-tab="replay" hidden>Replay</button>
   <span class="tabs-sym" id="symLabel"></span>
   <span class="pill" id="srcPill">Connecting</span>
   <button class="btn ghost sm" id="modeBtn" type="button" hidden></button>
@@ -38,6 +39,7 @@
   <span class="pill" id="mktPill" hidden></span>
   <button class="btn ghost sm help" id="guideBtn" type="button" title="Show the beginner guide on the Markets tab">Beginner guide</button>
 </nav>
+<div class="replay-bar" id="replayBar" hidden aria-label="Replay controls"></div>
 
 <main>
   <section class="tab" id="tab-learn" role="tabpanel" hidden></section>
@@ -45,6 +47,7 @@
   <section class="tab" id="tab-chain" role="tabpanel" hidden></section>
   <section class="tab" id="tab-strategy" role="tabpanel" hidden></section>
   <section class="tab" id="tab-positions" role="tabpanel" hidden></section>
+  <section class="tab" id="tab-replay" role="tabpanel" hidden></section>
 </main>
 
 <dialog id="ticket" aria-label="Order ticket"></dialog>

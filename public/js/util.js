@@ -1,4 +1,5 @@
 // Small shared helpers: formatting, DOM building, API calls, toasts.
+import { now } from './bs.js';
 
 export const inr0 = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 export const inr2 = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -20,11 +21,14 @@ export const vixMood = (v) => v < 13 ? { key: 'calm', label: 'Calm', hint: 'Trad
   : { key: 'fearful', label: 'Fearful', hint: 'Traders expect large swings. Options are expensive and prices jump around.' };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const fmtExpiry = (iso) => { const [y, m, d] = iso.split('-'); return `${+d} ${MONTHS[+m - 1]}${y !== String(new Date().getFullYear()) ? ' ' + y : ''}`; };
+export const fmtExpiry = (iso) => { const [y, m, d] = iso.split('-'); return `${+d} ${MONTHS[+m - 1]}${y !== String(new Date(now()).getFullYear()) ? ' ' + y : ''}`; };
 export const fmtExpiryLong = (iso) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-export const daysTo = (iso) => (Date.parse(iso + 'T15:30:00+05:30') - Date.now()) / 864e5;
+export const daysTo = (iso) => (Date.parse(iso + 'T15:30:00+05:30') - now()) / 864e5;
+export const fmtDay = (iso, opts = {}) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC', ...opts });
 export const fmtLeft = (iso) => { const d = daysTo(iso); return d <= 0 ? 'expired' : d < 1 ? `${Math.max(0, d * 24).toFixed(1)} h left` : `${d.toFixed(1)} days left`; };
 export const fmtTime = (ms) => new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+// Replay orders all happen "at the close", so show their day instead of a clock time.
+export const fmtWhen = (ms, replay) => (replay ? new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : fmtTime(ms));
 
 export function el(tag, attrs = {}, ...kids) {
   const e = document.createElement(tag);
