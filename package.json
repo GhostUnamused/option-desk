@@ -1,6 +1,6 @@
 {
   "name": "option-desk",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "type": "module",
   "description": "Local NIFTY index options desk: live chains, charts, strategy builder and paper trading.",
