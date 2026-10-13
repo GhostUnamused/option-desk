@@ -113,20 +113,30 @@ function renderAcctMini() {
 }
 
 // Desktop app (OptionDesk.exe): version, live/simulated switch, updates, and telling the app when this window closes.
-async function waitForRestart(msg) {
-  document.body.style.opacity = '.4'; document.body.style.pointerEvents = 'none'; toast(msg);
-  for (let i = 0; i < 120; i++) {
+// Full-screen "please wait" while the app downloads an update or restarts. Returns a function that removes it.
+function busy(title, detail) {
+  const secs = el('span', { text: '0 s' });
+  const box = el('div', { class: 'busy', role: 'alertdialog', 'aria-live': 'polite' },
+    el('div', { class: 'busy-card' }, el('b', { text: title }), el('p', { text: detail }), el('p', { class: 'muted' }, 'Elapsed: ', secs)));
+  document.body.append(box);
+  const t0 = Date.now(), timer = setInterval(() => { secs.textContent = Math.round((Date.now() - t0) / 1000) + ' s'; }, 1000);
+  return () => { clearInterval(timer); box.remove(); };
+}
+
+// Poll until the restarted app answers and is in the expected state, then reload into it.
+async function waitForRestart(done, close) {
+  for (let i = 0; i < 180; i++) {
     await new Promise((r) => setTimeout(r, 1000));
-    try { await api('/api/meta'); location.reload(); return; } catch {}
+    try { if (done(await api('/api/meta'))) { location.reload(); return; } } catch {}
   }
-  document.body.style.opacity = ''; document.body.style.pointerEvents = '';
+  close();
   toast('Option Desk did not come back. Open it again from its shortcut.', 'err');
 }
 
 async function checkUpdate() {
   const u = await api('/api/update').catch(() => null); const b = $('#updPill');
   if (!u?.available) { b.hidden = true; return; }
-  b.hidden = false; b.className = 'pill ok'; b.textContent = u.latest === u.current ? 'Update available' : `Update to ${u.latest}`; b.dataset.version = u.latest;
+  b.hidden = false; b.className = 'pill ok'; b.textContent = u.latest === u.current ? 'Update available' : `Update to ${u.latest}`; b.dataset.version = u.latest; b.dataset.big = u.needsNewExe ? '1' : '';
   b.title = (u.notes ? u.notes + '. ' : '') + (u.needsNewExe ? 'This update replaces the app file (about 100 MB).' : 'Small download.') + ' Your paper account is kept.';
 }
 
@@ -144,18 +154,26 @@ function initDesktop() {
       ? 'Switch to the simulated market? Prices become made-up and you trade in a separate practice account. Option Desk restarts in a few seconds.'
       : 'Switch back to live NSE prices? Option Desk restarts in a few seconds.';
     if (!confirm(msg)) return;
+    const close = busy(toSim ? 'Switching to the simulated market' : 'Switching to live NSE prices', 'Option Desk is restarting. This page reloads by itself in a few seconds.');
     await api('/api/restart', { sim: toSim }).catch(() => {});
-    waitForRestart(toSim ? 'Switching to the simulated market' : 'Switching to live NSE');
+    waitForRestart((m) => m.app.started !== app.started && m.mock === toSim, close);
   });
   $('#updPill').addEventListener('click', async () => {
-    if (!confirm(`Install the update now? Option Desk downloads it and restarts. Your paper account is kept.`)) return;
-    toast('Downloading update');
-    try { await api('/api/update', {}); waitForRestart('Installing update'); }
-    catch (e) { toast(e.message, 'err'); }
+    const big = $('#updPill').dataset.big === '1';
+    if (!confirm(`Install the update now? Option Desk downloads it (${big ? 'about 100 MB' : 'about 0.5 MB'}) and restarts. Your paper account is kept.`)) return;
+    const close = busy('Updating Option Desk', `Downloading ${big ? 'about 100 MB, which can take a minute or two' : 'a small update'}. Option Desk then restarts and this page reloads by itself. Keep this window open.`);
+    try {
+      const r = await api('/api/update', {});
+      store.set('updatedTo', r.version);
+      waitForRestart((m) => m.app.started !== app.started && m.app.version === r.version, close);
+    } catch (e) { close(); toast(`Update failed: ${e.message}`, 'err'); }
   });
+  const updated = store.get('updatedTo', null);
+  if (updated) { store.set('updatedTo', null); if (updated === app.version) toast(`Updated to Option Desk ${app.version}.`); }
   if (app.updates) { checkUpdate(); setInterval(checkUpdate, 3 * 3600e3); }
   const id = Math.random().toString(36).slice(2);
-  const ping = () => fetch('/api/ping?c=' + id, { method: 'POST' }).catch(() => {});
+  // If the app underneath was updated or switched while this window stayed open, reload so the page matches it.
+  const ping = () => api('/api/ping?c=' + id, {}).then((r) => { if (r.version && (r.version !== app.version || r.mock !== S.meta.mock)) location.reload(); }).catch(() => {});
   ping(); setInterval(ping, 30000);
   addEventListener('pagehide', () => navigator.sendBeacon('/api/bye?c=' + id));
 }

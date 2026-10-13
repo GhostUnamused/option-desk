@@ -17,7 +17,7 @@ const provider = MOCK ? new MockProvider() : new NseProvider();
 desktop.migrateData();
 const account = new PaperAccount(path.join(desktop.DATA_DIR, MOCK ? 'paper-sim.json' : 'paper.json'), provider);
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png' };
 
 function send(res, code, body) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -45,7 +45,7 @@ const routes = {
   'GET /api/update': async (q) => desktop.checkUpdate(q.get('force') === '1'),
   'POST /api/update': async () => { const r = await desktop.installUpdate(); desktop.restart(MOCK); return r; },
   'POST /api/restart': async (q, b) => { desktop.restart(b.sim ?? MOCK); return { ok: true }; },
-  'POST /api/ping': async (q) => { desktop.ping(q.get('c')); return {}; },
+  'POST /api/ping': async (q) => { desktop.ping(q.get('c')); return { version: desktop.VERSION, mock: MOCK }; },
   'POST /api/bye': async (q) => { desktop.bye(q.get('c')); return {}; },
   'POST /api/quit': async () => { if (desktop.PACKAGED) setTimeout(() => desktop.quit('asked by a newer copy'), 50); return { ok: desktop.PACKAGED }; },
 };

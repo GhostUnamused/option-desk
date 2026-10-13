@@ -196,6 +196,9 @@ dialog#ticket::backdrop { background: rgba(8, 12, 18, .45); }
 .drawer .tk-h { padding-top: 16px; }
 .drawer-b { padding: 14px 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
 
+.busy { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(0, 0, 0, .72); padding: 16px; }
+.busy-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 20px 22px; max-width: 420px; display: flex; flex-direction: column; gap: 8px; line-height: 1.5; box-shadow: var(--shadow); }
+.busy-card b { font-family: var(--display); font-size: 1.1rem; }
 .toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 60; }
 .toast { background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; box-shadow: var(--shadow); font-size: .92rem; transition: opacity .4s, transform .4s; max-width: 90vw; }
 .toast.ok { background: var(--up); color: #fff; } .toast.err { background: var(--down); color: #fff; }

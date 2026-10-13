@@ -3,10 +3,10 @@
 // walker, a rasterizer for the icon and a PNG encoder on top of zlib.
 import zlib from 'node:zlib';
 
-// ---- Icon artwork: a near-black tile with a payoff line (flat, then rising) ----
-// Coordinates are in a 0..1 square. Matches the favicon in public/index.html.
-const TILE = [15, 15, 15], EDGE = [52, 52, 52], WHITE = [237, 237, 237], TEAL = [8, 153, 129];
-const FLAT = [[0.2, 0.66], [0.47, 0.66]], RISE = [[0.47, 0.66], [0.8, 0.3]];
+// ---- Icon artwork: a near-black tile with a teal glow and a payoff line (flat, then rising) ----
+// Coordinates are in a 0..1 square. Matches public/icons (see the web-asset-generator source).
+const TILE = [15, 15, 15], EDGE = [52, 52, 52], WHITE = [237, 237, 237], TEAL = [14, 196, 160];
+const FLAT = [[0.19, 0.68], [0.46, 0.68]], RISE = [[0.46, 0.68], [0.8, 0.29]];
 
 function segDist(px, py, [[ax, ay], [bx, by]]) {
   const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
@@ -17,17 +17,23 @@ function roundRectDist(px, py, r) { // signed distance to a rounded square inset
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
 
+// Tile fill: dark vertical gradient with a soft teal glow towards the top right.
+function tileColor(u, v) {
+  const base = 26 - 12 * v, glow = Math.max(0, 1 - Math.hypot(u - 0.8, v - 0.3) / 0.6) * 0.28;
+  return [base + (TEAL[0] - base) * glow, base + (TEAL[1] - base) * glow, base + 1 + (TEAL[2] - base) * glow];
+}
+
 // RGBA pixels, top row first. 4x4 supersampling for smooth edges.
 export function drawIcon(size) {
   const px = Buffer.alloc(size * size * 4), n = 4;
-  const stroke = size <= 24 ? 0.13 : 0.1, edge = Math.max(1 / size, 0.012);
+  const stroke = size <= 24 ? 0.13 : 0.095, edge = Math.max(1 / size, 0.012);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     let r = 0, g = 0, b = 0, a = 0;
     for (let sy = 0; sy < n; sy++) for (let sx = 0; sx < n; sx++) {
       const u = (x + (sx + 0.5) / n) / size, v = (y + (sy + 0.5) / n) / size;
       const d = roundRectDist(u, v, 0.22);
       if (d > 0) continue;
-      let c = d > -edge ? EDGE : TILE;
+      let c = d > -edge ? EDGE : tileColor(u, v);
       if (segDist(u, v, RISE) < stroke / 2) c = TEAL;
       else if (segDist(u, v, FLAT) < stroke / 2) c = WHITE;
       r += c[0]; g += c[1]; b += c[2]; a++;
