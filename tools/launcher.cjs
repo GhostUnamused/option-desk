@@ -3,7 +3,7 @@
 // %LOCALAPPDATA%\OptionDesk\app\<version> unless a newer version is already installed there by the in-app updater,
 // then runs that version's server.js. Paper accounts live in %LOCALAPPDATA%\OptionDesk\data and survive updates.
 // Bump LAUNCHER_VERSION only when this file changes: the updater then also downloads a new exe.
-const LAUNCHER_VERSION = 2;
+const LAUNCHER_VERSION = 3;
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -13,7 +13,7 @@ const { spawn } = require('node:child_process');
 const { createRequire } = require('node:module');
 const sea = require('node:sea');
 
-const HOME = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'OptionDesk');
+const HOME = process.env.OPTION_DESK_HOME || path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'OptionDesk');
 const PORT = Number(process.env.PORT) || 4321;
 const RESTART = process.env.OPTION_DESK_RESTART === '1';
 fs.mkdirSync(path.join(HOME, 'logs'), { recursive: true });
@@ -56,7 +56,15 @@ function running() {
   });
 }
 
+function post(p) {
+  return new Promise((resolve) => {
+    const req = http.request({ host: '127.0.0.1', port: PORT, path: p, method: 'POST', timeout: 1500 }, (res) => { res.resume(); resolve(res.statusCode === 200); });
+    req.on('error', () => resolve(false)); req.on('timeout', () => { req.destroy(); resolve(false); }); req.end();
+  });
+}
+
 function openWindow(url) {
+  if (process.env.OPTION_DESK_NO_WINDOW) return; // tests
   const pf = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
   const browser = pf.flatMap((p) => [path.join(p, 'Microsoft', 'Edge', 'Application', 'msedge.exe'), path.join(p, 'Google', 'Chrome', 'Application', 'chrome.exe')]).find((f) => fs.existsSync(f));
   if (browser) spawn(browser, ['--app=' + url], { detached: true, stdio: 'ignore' }).unref();
@@ -71,9 +79,15 @@ async function main() {
   const other = RESTART ? null : await running();
   // A copy started from the project folder (start.bat / node server.js) has no app features, so don't quietly reuse it.
   if (other && !(other.app && other.app.packaged)) return fatal(new Error('Option Desk is already running from the project folder (start.bat or node server.js). Close that window, then open the app again.'));
-  if (other) { openWindow(`http://localhost:${PORT}`); setTimeout(() => process.exit(0), 500); return; }
-
   const embedded = JSON.parse(sea.getAsset('app-bundle.json', 'utf8'));
+  if (other) {
+    // An older copy is running (say you just downloaded a new exe): ask it to quit and take over. Otherwise open a window on it.
+    const older = cmp(embedded.version, other.app.version) > 0 || (other.app.launcher || 0) < LAUNCHER_VERSION;
+    if (!older || !(await post('/api/quit'))) { openWindow(`http://localhost:${PORT}`); setTimeout(() => process.exit(0), 500); return; }
+    log(`Replacing running ${other.app.version}`);
+    for (let i = 0; i < 40 && await running(); i++) await new Promise((r) => setTimeout(r, 250));
+  }
+
   const current = readJson(path.join(HOME, 'current.json'));
   let version = current && current.version;
   const sameButRebuilt = version === embedded.version && current.id !== embedded.id;

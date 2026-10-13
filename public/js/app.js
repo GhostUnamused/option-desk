@@ -126,7 +126,7 @@ async function waitForRestart(msg) {
 async function checkUpdate() {
   const u = await api('/api/update').catch(() => null); const b = $('#updPill');
   if (!u?.available) { b.hidden = true; return; }
-  b.hidden = false; b.className = 'pill ok'; b.textContent = `Update to ${u.latest}`; b.dataset.version = u.latest;
+  b.hidden = false; b.className = 'pill ok'; b.textContent = u.latest === u.current ? 'Update available' : `Update to ${u.latest}`; b.dataset.version = u.latest;
   b.title = (u.notes ? u.notes + '. ' : '') + (u.needsNewExe ? 'This update replaces the app file (about 100 MB).' : 'Small download.') + ' Your paper account is kept.';
 }
 
@@ -148,7 +148,7 @@ function initDesktop() {
     waitForRestart(toSim ? 'Switching to the simulated market' : 'Switching to live NSE');
   });
   $('#updPill').addEventListener('click', async () => {
-    if (!confirm(`Install version ${$('#updPill').dataset.version} now? Option Desk downloads it and restarts. Your paper account is kept.`)) return;
+    if (!confirm(`Install the update now? Option Desk downloads it and restarts. Your paper account is kept.`)) return;
     toast('Downloading update');
     try { await api('/api/update', {}); waitForRestart('Installing update'); }
     catch (e) { toast(e.message, 'err'); }

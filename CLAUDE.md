@@ -6,6 +6,7 @@ Local NSE index-options workstation: live quotes and charts, broker-style option
 - `node server.js` → http://localhost:4321 (live NSE). `node server.js --sim` (or `MOCK=1`) → simulated market, separate account file.
 - Windows: `start.bat`, `start-simulated.bat`. Node ≥ 18, zero npm dependencies — keep it that way unless there's a strong reason.
 - Desktop app: `node tools/build.mjs` → `dist/OptionDesk.exe` (Node single executable, GUI subsystem, opens an Edge/Chrome app window). Release: raise `version` in package.json, then `node tools/release.mjs "notes"` (needs `gh` and `updates.github` in package.json). Bump `LAUNCHER_VERSION` in `tools/launcher.cjs` only when that file changes; installed apps then download a new exe too.
+- Testing the exe: always isolate it from the owner's install with `OPTION_DESK_HOME=<scratch dir> OPTION_DESK_NO_WINDOW=1 PORT=4399` (and `OPTION_DESK_UPDATE_URL=http://127.0.0.1:<port>/` for a fake release). Never run test servers on 4321, the app's port; the preview config uses 4322 (`--port`).
 - Test UI changes in `--sim` mode first; NSE is only reachable on the owner's machine/network.
 
 ## Layout

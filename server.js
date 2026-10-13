@@ -47,6 +47,7 @@ const routes = {
   'POST /api/restart': async (q, b) => { desktop.restart(b.sim ?? MOCK); return { ok: true }; },
   'POST /api/ping': async (q) => { desktop.ping(q.get('c')); return {}; },
   'POST /api/bye': async (q) => { desktop.bye(q.get('c')); return {}; },
+  'POST /api/quit': async () => { if (desktop.PACKAGED) setTimeout(() => desktop.quit('asked by a newer copy'), 50); return { ok: desktop.PACKAGED }; },
 };
 
 const server = http.createServer(async (req, res) => {
@@ -78,7 +79,7 @@ server.on('error', (e) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Option Desk is running: http://localhost:${PORT}`);
   console.log(`  Data: ${MOCK ? 'simulated market (MOCK=1)' : 'live NSE'} · Paper account: ${path.join(desktop.DATA_DIR, MOCK ? 'paper-sim.json' : 'paper.json')}`);
-  if (desktop.PACKAGED && process.env.OPTION_DESK_RESTART !== '1') desktop.openWindow(`http://localhost:${PORT}`);
+  if (desktop.PACKAGED && process.env.OPTION_DESK_RESTART !== '1' && !process.env.OPTION_DESK_NO_WINDOW) desktop.openWindow(`http://localhost:${PORT}`);
   console.log('  Keep this window open. Press Ctrl+C to stop.\n');
   if (!MOCK) provider.indices().then(() => console.log('  Connected to NSE.')).catch((e) => console.log(`  Could not reach NSE yet: ${e.message}. The app will keep retrying.`));
 });
