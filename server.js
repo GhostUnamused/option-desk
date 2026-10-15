@@ -7,7 +7,7 @@ import { NseProvider } from './lib/nse.js';
 import { IndstocksProvider } from './lib/indstocks.js';
 import { loadDotEnv, SecretFile } from './lib/secrets.js';
 import { PaperAccount } from './lib/paper.js';
-import { INDICES, PAPER, RISK_FREE, REPLAY, CHARGES } from './lib/config.js';
+import { INDICES, PAPER, RISK_FREE, REPLAY, CHARGES, addStock, removeStock } from './lib/config.js';
 import * as desktop from './lib/desktop.js';
 import { ReplayEngine } from './lib/replay/engine.js';
 import { ReplayProvider } from './lib/replay/provider.js';
@@ -26,7 +26,13 @@ loadDotEnv(path.join(ROOT, '.env')); // source runs only: INDSTOCKS_TOKEN for th
 let replay = null, replayError = null;
 if (MOCK) { try { replay = new ReplayEngine(desktop.DATA_DIR); } catch (e) { replayError = e.message; console.log(`  Replay unavailable: ${e.message}`); } }
 // Live prices come from INDstocks when it has a token, else from NSE's website (IndstocksProvider falls back by itself).
-const broker = MOCK ? null : new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat')));
+const broker = MOCK ? null : new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat')), { stream: true });
+// Stocks the owner follows (their options join the symbol list). Kept with their lot, strike step and INDstocks id.
+const WATCH_FILE = path.join(desktop.DATA_DIR, 'watchlist.json');
+let watchlist = []; try { watchlist = JSON.parse(fs.readFileSync(WATCH_FILE, 'utf8')); } catch {}
+if (!MOCK) for (const s of watchlist) addStock(s);
+const saveWatchlist = () => { fs.mkdirSync(desktop.DATA_DIR, { recursive: true }); fs.writeFileSync(WATCH_FILE, JSON.stringify(watchlist, null, 1)); };
+const STOCKS_FILE = path.join(desktop.DATA_DIR, 'fno-stocks.json');
 const provider = MOCK ? (replay?.provider || new ReplayProvider({ snapshot() { throw new Error(replayError); } })) : broker;
 const account = MOCK ? replay?.account : new PaperAccount(path.join(desktop.DATA_DIR, 'paper.json'), provider);
 const news = new News({ cacheFile: path.join(desktop.DATA_DIR, 'news-cache.json') });
@@ -34,12 +40,14 @@ const liveHist = MOCK ? null : new LiveOptionHistory(desktop.DATA_DIR, provider)
 const istToday = () => new Date(Date.now() + 19800e3).toISOString().slice(0, 10);
 // Headlines and event names give the real date away, so a blind session gets none.
 const BLIND_NEWS = 'News and event markers are hidden in blind mode, because headlines would give away the real date.';
+const needBroker = () => { if (!broker) throw new Error('Option history comes from INDstocks, so it works with live prices only.'); if (!broker.usable()) throw new Error('Connect INDstocks (the Data button in the tab bar) to see option history.'); return broker; };
 const needAccount = () => { if (!account) throw new Error(replayError); return account; };
 const NOT_REPLAY = 'Replay is only available after switching to replay (node server.js --sim).';
 const needReplay = () => { if (!replay) throw new Error(replayError || NOT_REPLAY); return replay; };
 // Indices the page offers: replay has NIFTY and BANK NIFTY, with the lot size in force on the replay date.
 async function metaIndices() {
-  if (!MOCK) return INDICES;
+  // Live: BSE indices and stocks only have data through INDstocks, so they are offered once a token is in.
+  if (!MOCK) return Object.fromEntries(Object.entries(INDICES).filter(([, v]) => !v.broker || broker.token));
   const out = Object.fromEntries(REPLAY.symbols.map((s) => [s, { ...INDICES[s] }]));
   try { for (const i of (await provider.indices()).indices) out[i.symbol].lot = i.lot; } catch {}
   return out;
@@ -67,6 +75,11 @@ const routes = {
   'GET /api/intraday': async (q) => provider.intraday(sym(q)),
   'GET /api/daily': async (q) => ({ rows: await provider.daily(sym(q), Math.min(Number(q.get('days')) || 365, 730)) }),
   'GET /api/option-intraday': async (q) => provider.optionIntraday(q.get('id')),
+  // Option price history from INDstocks: live contracts by id, expired ones by trading symbol (live mode only).
+  'GET /api/option-candles': async (q) => needBroker().optionCandles(q.get('id'), q.get('range') || '1D'),
+  'GET /api/expired/expiries': async (q) => ({ expiries: await needBroker().expiredExpiries(sym(q)) }),
+  'GET /api/expired/contracts': async (q) => ({ contracts: await needBroker().expiredContracts(sym(q), q.get('expiry')) }),
+  'GET /api/expired/candles': async (q) => needBroker().expiredCandles(q.get('contract'), q.get('expiry'), q.get('range') || 'week'),
   'GET /api/option-history': async (q) => {
     const days = Math.min(Number(q.get('days')) || 365, 730);
     if (MOCK) return { rows: needReplay().snapshot().optionHistory(sym(q), days), intraday: [] };
@@ -96,6 +109,25 @@ const routes = {
   'POST /api/replay/step': async (q, b) => needReplay().step(b),
   'POST /api/replay/end': async () => needReplay().end(),
   'POST /api/replay/settings': async (q, b) => needReplay().setRiskFree(b.riskFreePct),
+  // Stock options: search the stocks that have options, and follow or drop one (live mode, INDstocks).
+  'GET /api/stocks': async (q) => {
+    const list = await needBroker().stockList(STOCKS_FILE), s = (q.get('q') || '').trim().toUpperCase();
+    const hits = s ? list.filter((x) => x.symbol.includes(s) || x.name.toUpperCase().includes(s)).sort((a, b) => (b.symbol.startsWith(s) - a.symbol.startsWith(s)) || a.symbol.localeCompare(b.symbol)) : list;
+    return { stocks: hits.slice(0, 40).map((x) => ({ ...x, watched: watchlist.some((w) => w.symbol === x.symbol) })), total: list.length, watchlist };
+  },
+  'POST /api/watchlist': async (q, b) => {
+    const symbol = String(b.symbol || '').toUpperCase();
+    if (b.add) {
+      if (watchlist.length >= 15) throw new Error('You can follow up to 15 stocks. Remove one first.');
+      const s = (await needBroker().stockList(STOCKS_FILE)).find((x) => x.symbol === symbol);
+      if (!s) throw new Error(`${symbol} has no listed options.`);
+      if (!watchlist.some((w) => w.symbol === symbol)) { watchlist.push(s); addStock(s); saveWatchlist(); }
+    } else {
+      if ((account?.state?.positions || []).some((p) => p.symbol === symbol)) throw new Error(`Close your ${symbol} positions before removing it.`);
+      watchlist = watchlist.filter((w) => w.symbol !== symbol); removeStock(symbol); saveWatchlist();
+    }
+    return { indices: await metaIndices(), watchlist };
+  },
   // Broker connection (live mode). The token goes in, never comes back out: status only says whether it works.
   'GET /api/broker': async () => (broker ? broker.status() : { available: false }),
   'POST /api/broker': async (q, b) => { if (!broker) throw new Error('Switch to live prices to connect INDstocks.'); return broker.setToken(b.token); },
@@ -118,6 +150,8 @@ function canTrade() {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  // Live ticks for the page (server-sent events). Replay, or no broker: the page just keeps polling.
+  if (url.pathname === '/api/stream') { if (!broker?.stream) { res.writeHead(204); return res.end(); } return broker.stream.attach(res); }
   const route = routes[`${req.method} ${url.pathname}`];
   if (route) {
     // Only this app's own page may change things: a POST from any other website (Origin set and not ours) is refused.

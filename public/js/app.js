@@ -11,6 +11,8 @@ import * as ticket from './ticket.js';
 import * as replay from './replay.js';
 import { closeDrawer } from './drawer.js';
 import * as broker from './broker.js';
+import * as live from './live.js';
+import * as stocks from './stocks.js';
 
 const TABS = { learn, markets, chain, strategy, positions };
 // Replay mode before any session: only the lessons and the Replay tab have anything to show.
@@ -22,7 +24,7 @@ let lastQuote = {}, offline = null, quotesAt = 0;
 const INTROS = {
   learn: ['Get a feel for how option prices move.', ' Six short lessons, each with an experiment on the sliders below. No real money, no market needed: drag things and watch what happens.'],
   markets: ['How is the market doing?', ' Check the index chart and the plain-English market read before you think about any trade.'],
-  chain: ['Every option for this index on one screen.', ' Calls (bets on a rise) are on the left, puts (bets on a fall) on the right, and the strike price runs down the middle.'],
+  chain: ['Every option on one screen.', ' Calls (bets on a rise) are on the left, puts (bets on a fall) on the right, and the strike price runs down the middle.'],
   strategy: ['Plan a trade before you place it.', ' Pick a ready-made strategy for your view of the market and see the most you could make or lose.'],
   positions: ['Your practice account.', ' Track open trades, profit and loss, and every order you have placed. All money here is pretend.'],
 };
@@ -260,6 +262,11 @@ async function boot() {
   initTickerStrip();
   initDesktop();
   broker.init();
+  stocks.init();
+  on('universe', () => pollQuotes());
+  // Streamed index ticks: header numbers move at once; the rest of the page catches up at most once a second.
+  let lastEmit = 0;
+  live.init(() => { renderTickers(); if (Date.now() - lastEmit > 1000) { lastEmit = Date.now(); emit('quotes', S.quotes); } });
   for (const [k, mod] of Object.entries(TABS)) { const sec = $('#tab-' + k); if (INTROS[k]) sec.append(intro(k)); mod.init?.(sec); }
   $('#tab-markets').prepend(guide());
   $('#guideBtn').addEventListener('click', () => { $('#guide').hidden = false; store.set('guideHidden', false); showTab('markets'); scrollTo({ top: 0, behavior: 'smooth' }); });

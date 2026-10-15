@@ -4,6 +4,7 @@ import { term } from './glossary.js';
 import { S, on, cfg, quote, loadChain, analysisExpiry, loadExpiries } from './state.js';
 import { yearsTo, now } from './bs.js';
 import { StudyChart, indicatorMenu, loadPrefs, savePrefs } from './studies.js';
+import { open as openStocks, available as stocksAvailable } from './stocks.js';
 import { alignTo, STUDIES } from './indicators.js';
 import * as news from './newsfeed.js';
 
@@ -32,7 +33,8 @@ export function init(sec) {
       el('div', { class: 'side-col' },
         el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Market read' }), el('span', { class: 'sp' }), el('span', { class: 'note', id: 'readExp' })), readBox),
         news.panel())),
-    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Index derivatives' }), el('span', { class: 'note', text: 'Click a row to switch the whole app to that index.' })), tableBox),
+    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Indices and stocks' }), el('span', { class: 'note', text: 'Click a row to switch the whole app to it.' }), el('span', { class: 'sp' }),
+      stocksAvailable() ? el('button', { class: 'btn ghost sm', type: 'button', text: '＋ Stock options', title: 'Follow a stock to trade its options', onclick: openStocks }) : null), tableBox),
   );
   on('quotes', () => { if (S.tab === 'markets') { renderHead(); renderTable(); if (range === '1D') liveTick(); } });
   on('symbol', () => { if (S.tab === 'markets') { draw(true); renderHead(); news.refresh(); } });
@@ -46,7 +48,10 @@ let ticks = 0;
 export async function tick() { renderRead(); if (++ticks % 12 === 0) news.refresh(); }
 
 function makeChart() {
-  chart = new StudyChart($('#mkChart'), { height: 420, onRemove: (id) => { prefs.on.delete(id); savePrefs(prefs); menu.refresh(); draw(false); } });
+  chart = new StudyChart($('#mkChart'), { height: 420,
+    onRemove: (id) => { prefs.on.delete(id); prefs.hidden.delete(id); savePrefs(prefs); menu.refresh(); draw(false); },
+    onToggle: (id) => { prefs.hidden.has(id) ? prefs.hidden.delete(id) : prefs.hidden.add(id); savePrefs(prefs); draw(false); },
+    onSettings: (id) => menu.open(id) });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { chart.applyTheme(); draw(true); });
 }
 
@@ -119,7 +124,7 @@ async function draw(reset) {
     chart.render(data, prefs, reset);
     if (reset && from) chart.main.timeScale().setVisibleLogicalRange({ from, to: data.bars.length + 3 });
     const panes = STUDIES.filter((s) => s.where === 'pane' && prefs.on.has(s.id)).length;
-    legend.replaceChildren(el('span', { text: info }), el('span', { text: prefs.on.size ? `${prefs.on.size} indicator${prefs.on.size > 1 ? 's' : ''} on${panes ? `, ${panes} in panes below` : ''}. Hover the chart to read values; × hides one.` : 'No indicators on: open Indicators to add some.' }));
+    legend.replaceChildren(el('span', { text: info }), el('span', { text: prefs.on.size ? `${prefs.on.size} indicator${prefs.on.size > 1 ? 's' : ''} on${panes ? `, ${panes} in panes below` : ''}. Hover the chart to read values; hover a legend line to hide (eye), adjust (gear) or remove (×) it, or fold the legend with the arrow.` : 'No indicators on: open Indicators to add some.' }));
     lastDraw = Date.now();
   } catch (e) { legend.replaceChildren(el('span', { class: 'down', text: `Chart unavailable: ${e.message}` })); }
 }
@@ -151,7 +156,7 @@ function renderTable() {
   const q = S.quotes; if (!q) return;
   const rows = [...q.indices, ...(q.vix ? [q.vix] : [])];
   const t = el('table', {},
-    el('thead', {}, el('tr', {}, ['Index', 'Last', 'Change', '%', 'Open', 'High', 'Low', 'Prev close', '52-week range', 'Lot'].map((h, i) => el('th', { class: i === 0 || i === 8 ? 'l' : '' }, term(h))))),
+    el('thead', {}, el('tr', {}, ['Name', 'Last', 'Change', '%', 'Open', 'High', 'Low', 'Prev close', '52-week range', 'Lot'].map((h, i) => el('th', { class: i === 0 || i === 8 ? 'l' : '' }, term(h))))),
     el('tbody', {}, rows.map((i) => el('tr', { style: { cursor: i.symbol === 'INDIAVIX' ? 'default' : 'pointer' }, onclick: () => i.symbol !== 'INDIAVIX' && import('./state.js').then((m) => m.setSymbol(i.symbol)) },
       el('td', { class: 'l t', text: i.name + (i.symbol === S.symbol ? '  •' : '') }), el('td', { text: inr2.format(i.last) }),
       el('td', { class: tone(i.change), text: (i.change >= 0 ? '+' : '−') + inr2.format(Math.abs(i.change)) }), el('td', { class: tone(i.pct), text: pct(i.pct) }),

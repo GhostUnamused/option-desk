@@ -5,12 +5,14 @@ import { bs, yearsTo } from './bs.js';
 import * as ticket from './ticket.js';
 import * as drawer from './drawer.js';
 import { term } from './glossary.js';
+import * as expired from './expired.js';
+import * as stocks from './stocks.js';
 
 let root, tbody, statsBox, oiBox, win = store.get('chainWin', 12), greeks = store.get('chainGreeks', true), full = store.get('chainFull', false), oiMode = 'oi', centerNext = true, lastKey = '';
 
 export function init(sec) {
   root = sec;
-  const symSel = el('select', { class: 'sel', id: 'chSym', 'aria-label': 'Index', onchange: (e) => setSymbol(e.target.value) });
+  const symSel = el('select', { class: 'sel', id: 'chSym', 'aria-label': 'Underlying', onchange: (e) => { if (e.target.value === '__add') { e.target.value = S.symbol; stocks.open(); } else setSymbol(e.target.value); } });
   const expSel = el('select', { class: 'sel', id: 'chExp', 'aria-label': 'Expiry', onchange: (e) => { S.expiry[S.symbol] = e.target.value; centerNext = true; refresh(true); } });
   const winSeg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Strikes shown' }, [[8, '±8'], [12, '±12'], [20, '±20'], [999, 'All']].map(([n, t]) => el('button', { type: 'button', class: n === win ? 'on' : '', text: t, onclick: (e) => { win = n; store.set('chainWin', n); e.target.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.target)); centerNext = true; render(); } })));
   const viewSeg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Columns shown' }, [[false, 'Simple'], [true, 'Full detail']].map(([v, t]) => el('button', { type: 'button', class: v === full ? 'on' : '', text: t, title: v ? 'Show every column: change in OI, volume, bid and ask' : 'Show only the key columns', onclick: (e) => { full = v; store.set('chainFull', v); e.target.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === e.target)); render(); } })));
@@ -34,22 +36,38 @@ export function init(sec) {
     el('p', { class: 'note', text: 'How to trade: hover a price and press B to buy or S to sell (on a phone, tap the buttons under the price). Click a price first to see its chart and Greeks. ' + (S.meta.replay ? 'Prices are that day\'s closes. Buys fill a little above the close and sells a little below (slippage); faded prices did not trade that day and cannot be filled.' : 'Buys fill at the ask, sells at the bid.') }),
     el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Where writers are positioned' }), el('span', { class: 'sp' }), oiSeg),
       el('div', { class: 'legend', style: { marginBottom: '6px' } }, el('span', {}, el('i', { class: 'sw', style: { background: 'var(--down)' } }), 'Calls (a ceiling: writers bet against a rise)'), el('span', {}, el('i', { class: 'sw', style: { background: 'var(--up)' } }), 'Puts (a floor: writers bet against a fall)')), oiBox),
+    S.meta.replay ? null : expired.panel(),
   );
   on('symbol', () => { centerNext = true; if (S.tab === 'chain') { fillSelects(); refresh(true); } });
+  on('universe', () => { if (S.tab === 'chain') fillSelects(); });
   on('expiries', () => { if (S.tab === 'chain') { fillSelects(); refresh(true); } });
+  // Streamed prices: move the price cells in place (keeps the hover Buy/Sell buttons), with a brief flash.
+  on('ticks', ({ options }) => {
+    if (S.tab !== 'chain' || !chainData) return;
+    for (const r of chainData.rows) for (const o of [r.ce, r.pe]) {
+      if (!o || !options.has(o.id)) continue;
+      const cell = tbody.querySelector(`td[data-id="${o.id}"]`); if (!cell) continue;
+      const [p, ch] = cell.children, old = p.textContent, now = inr2.format(o.ltp);
+      if (old === now) continue;
+      p.textContent = now; ch.textContent = pct(o.pchg || 0, 1); ch.className = 'chg ' + tone(o.chg);
+      cell.classList.remove('tick-up', 'tick-down'); void cell.offsetWidth; cell.classList.add(o.ltp > parseFloat(old.replace(/,/g, '')) ? 'tick-up' : 'tick-down');
+    }
+  });
 }
 
 function fillSelects() {
-  const ss = $('#chSym'); ss.replaceChildren(...Object.entries(S.meta.indices).map(([k, v]) => new Option(v.short, k, false, k === S.symbol)));
+  const ss = $('#chSym'); ss.replaceChildren(...Object.entries(S.meta.indices).map(([k, v]) => new Option(v.short, k, false, k === S.symbol)), ...(stocks.available() ? [new Option('＋ Stock options…', '__add')] : []));
   const es = $('#chExp'); es.replaceChildren(...(S.expiries[S.symbol] || []).map((e) => new Option(fmtExpiryLong(e), e, false, e === S.expiry[S.symbol])));
   $('#chLeft').textContent = S.expiry[S.symbol] ? fmtLeft(S.expiry[S.symbol]) : '';
 }
 
-export async function show() { await loadExpiries().catch(() => {}); fillSelects(); refresh(true); }
+export async function show() { await loadExpiries().catch(() => {}); fillSelects(); refresh(true); if (!S.meta.replay) expired.show(); }
 export function hide() {}
 export function tick() { refresh(false); }
 
 let chainData = null;
+// What the options are on, in words: 'share' for a stock, 'index' otherwise.
+const what = () => (cfg()?.kind === 'stock' ? 'share' : 'index');
 async function refresh(force) {
   const sym = S.symbol, exp = S.expiry[sym]; if (!exp) return;
   try {
@@ -74,7 +92,7 @@ function render() {
   const head = (h) => el('th', {}, term(h === 'LTP' ? 'Price' : h, h));
   if (key !== lastKey) {
     $('#chHead').replaceChildren(
-      el('tr', {}, el('th', { class: 'side ce', colspan: String(callCols.length) }, term('Calls', 'call'), ' · gain if the index rises'), el('th', { class: 'side', text: '' }), el('th', { class: 'side pe', colspan: String(callCols.length) }, term('Puts', 'put'), ' · gain if the index falls')),
+      el('tr', {}, el('th', { class: 'side ce', colspan: String(callCols.length) }, term('Calls', 'call'), ` · gain if the ${what()} rises`), el('th', { class: 'side', text: '' }), el('th', { class: 'side pe', colspan: String(callCols.length) }, term('Puts', 'put'), ` · gain if the ${what()} falls`)),
       el('tr', {}, ...callCols.map(head), el('th', { style: { textAlign: 'center' } }, term('Strike')), ...[...callCols].reverse().map(head)));
   }
   const frag = [];
@@ -91,7 +109,7 @@ function render() {
         const oiTd = td(compact.format(o.oi), t === 'CE' ? 'ce-oi' : 'pe-oi'); oiTd.prepend(el('span', { class: 'oibar', style: { width: `${(o.oi / maxOi) * 100}%` } }));
         const iv = o.iv > 0 ? o.iv : atmIv;
         const delta = bs(t, spot, row.strike, T, r, iv / 100).delta;
-        const ltp = el('td', { class: (itm ? 'itm ' : '') + `ltp act ${t === 'CE' ? 'ce-ltp' : 'pe-ltp'}` + (o.traded === false ? ' notraded' : ''), title: o.traded === false ? 'No trades in this option on this day, so it cannot be bought or sold in replay. The price shown is NSE\'s settlement estimate.' : 'Click for chart and Greeks', onclick: (e) => { if (!e.target.closest('.bs')) drawer.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t }); } },
+        const ltp = el('td', { 'data-id': o.id || null, class: (itm ? 'itm ' : '') + `ltp act ${t === 'CE' ? 'ce-ltp' : 'pe-ltp'}` + (o.traded === false ? ' notraded' : ''), title: o.traded === false ? 'No trades in this option on this day, so it cannot be bought or sold in replay. The price shown is NSE\'s settlement estimate.' : 'Click for chart and Greeks', onclick: (e) => { if (!e.target.closest('.bs')) drawer.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t }); } },
           el('span', { text: inr2.format(o.ltp) }), el('span', { class: 'chg ' + tone(o.chg), text: pct(o.pchg || (o.ltp - o.chg ? (o.chg / (o.ltp - o.chg)) * 100 : 0), 1) }),
           el('span', { class: 'bs' }, el('button', { class: 'b', type: 'button', title: 'Buy', text: 'B', onclick: () => ticket.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t, side: 'BUY' }) }), el('button', { class: 's', type: 'button', title: 'Sell', text: 'S', onclick: () => ticket.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t, side: 'SELL' }) })));
         cells.push(oiTd);

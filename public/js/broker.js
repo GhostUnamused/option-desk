@@ -23,9 +23,9 @@ export function update(s) {
   const pill = $('#srcPill');
   const via = s.answering === 'INDstocks' ? 'INDstocks' : 'NSE website';
   pill.className = 'pill ' + (s.expired ? 'bad' : s.answering === 'INDstocks' ? 'ok' : s.hasToken ? 'warn' : '');
-  pill.textContent = s.expired ? 'INDstocks token expired' : `Data: ${via}`;
+  pill.textContent = s.expired ? 'INDstocks token expired' : `Data: ${via}${s.answering === 'INDstocks' && s.stream === 'live' ? ' · live' : ''}`;
   pill.title = s.expired ? 'Paste a fresh INDstocks access token to get broker prices again. Until then prices come from NSE\'s website.'
-    : s.answering === 'INDstocks' ? 'Live prices from your INDstocks account. Click to manage the connection.'
+    : s.answering === 'INDstocks' ? `Live prices from your INDstocks account${s.stream === 'live' ? ', streamed tick by tick' : ''}. Click to manage the connection.`
     : s.problem ? `INDstocks did not answer (${s.problem}), so prices come from NSE's website for now. Click for details.`
     : 'Prices come from NSE\'s public website. Click to connect INDstocks for steadier live prices.';
   if (s.expired && !warnedExpired) { warnedExpired = true; toast('Your INDstocks token has expired. Click the red pill in the tab bar to paste a fresh one.', 'err'); }

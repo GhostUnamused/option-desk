@@ -11,14 +11,16 @@ export function loadPrefs() {
   const p = store.get('studies', null);
   const on = new Set((p?.on || DEFAULT_ON).filter((id) => byId[id]));
   const params = {}; for (const s of STUDIES) params[s.id] = { ...s.params, ...(p?.params?.[s.id] || {}) };
-  return { on, params };
+  // hidden: switched off with the eye in the legend but kept, with its settings, like TradingView.
+  return { on, params, hidden: new Set((p?.hidden || []).filter((id) => on.has(id))) };
 }
-export function savePrefs(pr) { store.set('studies', { on: [...pr.on], params: pr.params }); }
+export function savePrefs(pr) { store.set('studies', { on: [...pr.on], params: pr.params, hidden: [...(pr.hidden || [])].filter((id) => pr.on.has(id)) }); }
+export const label = (s, p) => (s.short ? s.short(p) : s.name);
 
 function tokens() {
   const cs = getComputedStyle(document.documentElement), g = (n) => cs.getPropertyValue(n).trim();
   const t = { bg: g('--panel'), muted: g('--muted'), line: g('--line'), grid: g('--grid'), up: g('--up'), down: g('--down'), fg: g('--fg') };
-  for (let i = 1; i <= 7; i++) t['c' + i] = g('--s' + i);
+  for (let i = 1; i <= 8; i++) t['c' + i] = g('--s' + i);
   return t;
 }
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
@@ -35,10 +37,41 @@ function chartOpts(t, { timeVisible, showTime, height }) {
   };
 }
 
+// Shades the band between two lines (Bollinger, Keltner, Donchian) under the candles, the way TradingView fills them.
+// A series primitive: it draws in the price series' pane using that series' price scale.
+class BandFill {
+  constructor(bars, up, lo, color) { this.bars = bars; this.up = up; this.lo = lo; this.color = color; }
+  attached({ chart, series }) { this.chart = chart; this.series = series; }
+  detached() { this.chart = this.series = null; }
+  updateAllViews() {}
+  paneViews() {
+    return [{ zOrder: () => 'bottom', renderer: () => ({ draw: (target) => target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, verticalPixelRatio: vr }) => {
+      if (!this.series) return;
+      const ts = this.chart.timeScale(), runs = []; let run = [];
+      this.bars.forEach((b, i) => {
+        const u = this.up[i], l = this.lo[i], x = u == null || l == null ? null : ts.timeToCoordinate(b.time);
+        const yu = x == null ? null : this.series.priceToCoordinate(u), yl = x == null ? null : this.series.priceToCoordinate(l);
+        if (x == null || yu == null || yl == null) { if (run.length) runs.push(run); run = []; return; }
+        run.push([x * hr, yu * vr, yl * vr]);
+      });
+      if (run.length) runs.push(run);
+      ctx.fillStyle = this.color;
+      for (const r of runs) {
+        if (r.length < 2) continue;
+        ctx.beginPath(); ctx.moveTo(r[0][0], r[0][1]);
+        for (const [x, y] of r) ctx.lineTo(x, y);
+        for (let k = r.length - 1; k >= 0; k--) ctx.lineTo(r[k][0], r[k][2]);
+        ctx.closePath(); ctx.fill();
+      }
+    }) }) }];
+  }
+}
+
 export class StudyChart {
-  // onRemove(id) is called when a legend's × is pressed.
-  constructor(host, { height = 440, paneHeight = 118, onRemove } = {}) {
-    this.host = host; this.height = height; this.paneHeight = paneHeight; this.onRemove = onRemove;
+  // Legend buttons: onRemove(id) for ×, onToggle(id) for the eye, onSettings(id) for the gear.
+  constructor(host, { height = 440, paneHeight = 118, onRemove, onToggle, onSettings } = {}) {
+    this.host = host; this.height = height; this.paneHeight = paneHeight; this.onRemove = onRemove; this.onToggle = onToggle; this.onSettings = onSettings;
+    this.collapsed = store.get('legendCollapsed', false);
     this.mainBox = el('div', { class: 'sc-main', style: { height: height + 'px' } });
     this.mainLegend = el('div', { class: 'sc-legend' });
     this.paneBox = el('div', { class: 'sc-panes' });
@@ -99,8 +132,10 @@ export class StudyChart {
     this.main.applyOptions({ timeScale: { timeVisible: Boolean(data.intraday) } });
 
     const outs = new Map();
+    this.prefs = prefs;
     for (const id of prefs.on) {
       const s = byId[id]; if (!s) continue;
+      if (prefs.hidden?.has(id)) { outs.set(id, { lines: [], hidden: true }); continue; }
       const missing = s.needs && s.needs !== 'events' && (s.needs === 'chain' ? !data.chain : !(ctx[s.needs] || []).some((v) => v != null));
       let out; try { out = missing ? { lines: [] } : s.compute(bars, prefs.params[id], ctx); } catch (e) { out = { lines: [], error: e.message }; }
       if (missing) out.note = data.notes?.[s.needs] || 'No data for this yet.';
@@ -111,14 +146,16 @@ export class StudyChart {
     const marks = [], legend = [];
     for (const [id, out] of outs) {
       const s = byId[id]; if (s.where !== 'price') continue;
-      const entry = { id, name: s.name, help: s.help, values: [], note: out.note };
+      const entry = { id, name: label(s, prefs.params[id]), help: `${s.name}: ${s.help}`, values: [], note: out.note, hidden: out.hidden };
+      for (const f of out.fills || []) this.price.attachPrimitive(new BandFill(bars, f.up, f.lo, rgba(color(f.color), f.alpha ?? 0.07)));
       for (const ln of out.lines) {
-        const ser = this.main.addLineSeries({ color: color(ln.color), lineWidth: ln.width || 1.5, lineStyle: ln.dashed ? 2 : 0, lineVisible: !ln.dots, pointMarkersVisible: Boolean(ln.dots), pointMarkersRadius: 1.6, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        // Each line's latest value sits on the price axis in its own colour, so the axis says which line is which.
+        const ser = this.main.addLineSeries({ color: color(ln.color), lineWidth: ln.width || 1.5, lineStyle: ln.dashed ? 2 : 0, lineVisible: !ln.dots, pointMarkersVisible: Boolean(ln.dots), pointMarkersRadius: 1.6, priceLineVisible: false, lastValueVisible: !ln.dots && !ln.colors, crosshairMarkerVisible: false });
         ser.setData(lineData(bars, ln.data, ln.colors && ((i) => color(ln.colors[i] || ln.color))));
         this.mainSeries.push(ser); entry.values.push({ name: ln.name, color: color(ln.color), data: ln.data });
       }
       for (const pl of out.prices || []) if (Number.isFinite(pl.price)) this.price.createPriceLine({ price: pl.price, color: color(pl.color), lineStyle: 1, lineWidth: 1, axisLabelVisible: true, title: pl.title });
-      if (out.prices?.length) entry.text = out.prices.map((p) => `${p.title} ${inr2.format(p.price)}`).join(' · ');
+      for (const pl of out.prices || []) if (Number.isFinite(pl.price)) entry.values.push({ name: pl.title, color: color(pl.color), fixed: pl.price });
       for (const m of out.marks || []) marks.push({ time: bars[m.i].time, position: m.up ? 'belowBar' : 'aboveBar', color: m.up ? t.up : t.down, shape: m.up ? 'arrowUp' : 'arrowDown', text: m.text, title: m.title, i: m.i });
       if (id === 'events') {
         let shown = 0;
@@ -126,13 +163,20 @@ export class StudyChart {
           const i = e.i ?? nearestBar(bars, e.time); if (i == null) continue;
           marks.push({ time: bars[i].time, position: 'aboveBar', color: e.kind === 'scheduled' ? t.c5 : t.c4, shape: e.kind === 'scheduled' ? 'square' : 'circle', text: e.short || '', title: e.title, i }); shown++;
         }
-        entry.text = data.notes?.events || (shown ? `${shown} on this chart: hover a marker to read it` : 'None in this date range');
+        entry.text = data.notes?.events || (shown ? `${shown} · hover a marker` : 'none here');
       }
       legend.push(entry);
     }
     marks.sort((a, b) => a.i - b.i);
     this.marks = marks;
-    this.price.setMarkers(marks.map(({ time, position, color: c, shape, text }) => ({ time, position, color: c, shape, text })));
+    // Several events or headlines on one bar share a single marker ("3 news"), so they don't stack up the chart.
+    const shown = [];
+    for (const m of marks) {
+      const prev = shown[shown.length - 1];
+      if (m.position === 'aboveBar' && m.shape !== 'arrowDown' && prev?.i === m.i && prev.position === 'aboveBar' && prev.shape !== 'arrowDown') { prev.n++; prev.text = `${prev.n} news`; continue; }
+      shown.push({ ...m, n: 1 });
+    }
+    this.price.setMarkers(shown.map(({ time, position, color: c, shape, text }) => ({ time, position, color: c, shape, text, size: 0.8 })));
     this.legendRows = legend;
 
     // Panes: one per enabled pane study, in catalogue order
@@ -195,33 +239,46 @@ export class StudyChart {
     first ||= p.series[1];
     for (const lv of first ? out.levels || [] : []) first.createPriceLine({ price: lv, color: rgba(this.t.muted.startsWith('#') ? this.t.muted : '#8E8E93', 0.6), lineStyle: 2, lineWidth: 1, axisLabelVisible: false });
     p.anchorSeries = first || anchor;
-    p.study = s; p.out = out;
+    p.study = s; p.out = out; p.params = this.prefs?.params[s.id];
     if (out.rank) { const r = ivRank(out.lines[0].data); p.rank = r && r.n >= 20 ? r : null; } else p.rank = null;
   }
 
-  // Legends follow the crosshair, or show the latest values when the mouse is away.
+  // Legends follow the crosshair, or show the latest values when the mouse is away. TradingView style: one short line per
+  // study ("BB 20 2" then its values in their line colours), buttons on hover, and an arrow that folds them all away.
   showAt(i) {
     const n = this.bars.length; if (!n) return;
     const at = i ?? n - 1, b = this.bars[at];
-    const x = (id) => el('button', { class: 'sc-x', type: 'button', title: 'Hide', 'aria-label': 'Hide this indicator', text: '×', onclick: () => this.onRemove?.(id) });
-    const val = (name, c, v, unit) => el('span', { class: 'sc-v' }, el('i', { style: { background: c } }), name + ' ', el('b', { style: { color: c }, text: fmtV(v, unit) }));
+    this.lastAt = i;
+    const btn = (cls, title, text, fn) => el('button', { class: 'sc-b ' + cls, type: 'button', title, 'aria-label': title, text, onclick: fn });
+    const tools = (id, hidden) => el('span', { class: 'sc-tools' },
+      btn('sc-eye' + (hidden ? ' off' : ''), hidden ? 'Show' : 'Hide', hidden ? '◌' : '◉', () => this.onToggle?.(id)),
+      this.onSettings ? btn('', 'Settings', '⚙', () => this.onSettings(id)) : null,
+      btn('sc-x', 'Remove', '×', () => this.onRemove?.(id)));
+    const fmtP = (v) => (Math.abs(v) >= 1000 ? inr2.format(v) : v.toFixed(2));
+    const vals = (values, unit) => values.map((v) => el('b', { class: 'sc-val', style: { color: v.color }, title: v.name, text: v.fixed != null ? fmtP(v.fixed) : fmtV(v.data[at], unit) }));
+    const row = (id, name, help, values, extra, hidden, unit) => el('div', { class: 'sc-row' + (hidden ? ' off' : ''), 'data-id': id },
+      el('span', { class: 'sc-name term', tabindex: '0', 'data-tip': help, text: name }), ...(hidden ? [] : vals(values, unit)), ...(hidden ? [] : extra), tools(id, hidden));
     const ohlc = b && el('div', { class: 'sc-row sc-ohlc' }, ...(this.price.seriesType() === 'Candlestick' ? ['O', b.o, 'H', b.h, 'L', b.l, 'C', b.c].map((v, k) => (k % 2 ? el('b', { text: inr2.format(v) }) : el('span', { text: v }))) : [el('b', { text: inr2.format(b.c) })]),
       at > 0 ? el('span', { class: b.c >= this.bars[at - 1].c ? 'up' : 'down', text: `${b.c >= this.bars[at - 1].c ? '+' : '−'}${(Math.abs(b.c / this.bars[at - 1].c - 1) * 100).toFixed(2)}%` }) : null);
+    const count = this.legendRows.length + this.panes.size;
+    const fold = count ? btn('sc-fold' + (this.collapsed ? ' shut' : ''), this.collapsed ? 'Show indicator values' : 'Hide indicator values', this.collapsed ? `⌄ ${count}` : '⌃', () => this.fold()) : null;
     // Event and news titles only while hovering their bar, three at most, so they never sit on top of the chart.
     const all = i == null ? [] : (this.marks || []).filter((m) => m.i === at && m.title), evs = all.slice(0, 3);
-    this.mainLegend.replaceChildren(ohlc || '',
-      ...this.legendRows.map((r) => el('div', { class: 'sc-row' }, el('span', { class: 'sc-name term', tabindex: '0', 'data-tip': r.help, text: r.name }),
-        ...r.values.map((v) => val(v.name, v.color, v.data[at])), r.text ? el('span', { class: 'sc-t', text: r.text }) : null, r.note ? el('span', { class: 'sc-t', text: r.note }) : null, x(r.id))),
+    const t = (x) => (x ? el('span', { class: 'sc-t', text: x }) : null);
+    this.mainLegend.replaceChildren(el('div', { class: 'sc-top' }, ohlc || '', fold),
+      ...(this.collapsed ? [] : this.legendRows.map((r) => row(r.id, r.name, r.help, r.values, [t(r.text), t(r.note)], r.hidden))),
       ...evs.map((m) => el('div', { class: 'sc-row sc-ev' }, el('i', { style: { background: m.color } }), m.title)),
       all.length > 3 ? el('div', { class: 'sc-row sc-t', text: `and ${all.length - 3} more in the news panel` }) : '');
     for (const p of this.panes.values()) {
       const s = p.study, o = p.out; if (!s) continue;
-      p.legend.replaceChildren(el('div', { class: 'sc-row' }, el('span', { class: 'sc-name term', tabindex: '0', 'data-tip': s.help, text: s.name }),
-        ...p.lines.map((l) => val(l.name, l.color, l.data[at], o.unit)),
-        p.rank ? el('span', { class: 'sc-t', text: `Rank ${Math.round(p.rank.rank)} · percentile ${Math.round(p.rank.percentile)} (of ${p.rank.n} bars)` }) : null,
-        o.note ? el('span', { class: 'sc-t', text: o.note }) : null, o.error ? el('span', { class: 'sc-t down', text: o.error }) : null, x(s.id)));
+      p.legend.hidden = this.collapsed;
+      if (this.collapsed) continue;
+      p.legend.replaceChildren(row(s.id, label(s, p.params || s.params), `${s.name}: ${s.help}`, p.lines, [
+        p.rank ? t(`IV rank ${Math.round(p.rank.rank)} · pct ${Math.round(p.rank.percentile)}`) : null,
+        t(o.note), o.error ? el('span', { class: 'sc-t down', text: o.error }) : null], o.hidden, o.unit));
     }
   }
+  fold() { this.collapsed = !this.collapsed; store.set('legendCollapsed', this.collapsed); this.showAt(this.lastAt ?? null); }
 
   applyTheme() { this.t = tokens(); for (const c of this.charts()) c.applyOptions({ layout: { background: { type: 'solid', color: this.t.bg }, textColor: this.t.muted }, grid: { vertLines: { color: this.t.grid }, horzLines: { color: this.t.grid } } }); }
 }
@@ -255,18 +312,18 @@ export function indicatorMenu(prefs, onChange) {
   const btn = el('button', { class: 'btn ghost sm ind-btn', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false' });
   const pop = el('div', { class: 'ind-pop', role: 'dialog', 'aria-label': 'Indicators', hidden: true });
   const wrap = el('div', { class: 'ind' }, btn, pop);
-  const label = () => { btn.replaceChildren('Indicators', el('span', { class: 'ind-n', text: String(prefs.on.size) })); };
-  const changed = () => { savePrefs(prefs); label(); onChange(); };
+  const count = () => { btn.replaceChildren('Indicators', el('span', { class: 'ind-n', text: String(prefs.on.size) })); };
+  const changed = () => { savePrefs(prefs); count(); onChange(); };
   const build = () => {
     const presets = el('div', { class: 'ind-presets' }, el('span', { class: 'note', text: 'Presets' }),
-      ...Object.entries(PRESETS).map(([name, ids]) => el('button', { class: 'chip', type: 'button', text: name, onclick: () => { prefs.on = new Set(ids); build(); changed(); } })),
+      ...Object.entries(PRESETS).map(([name, ids]) => el('button', { class: 'chip', type: 'button', text: name, onclick: () => { prefs.on = new Set(ids); prefs.hidden?.clear(); build(); changed(); } })),
       el('button', { class: 'chip', type: 'button', text: 'Clear all', onclick: () => { prefs.on.clear(); build(); changed(); } }));
     const groups = GROUPS.map(([g, title, sub]) => el('fieldset', { class: 'ind-g' }, el('legend', {}, el('b', { text: title }), el('span', { class: 'note', text: sub })),
       ...STUDIES.filter((s) => s.group === g).map((s) => {
         const cb = el('input', { type: 'checkbox', checked: prefs.on.has(s.id), onchange: () => { cb.checked ? prefs.on.add(s.id) : prefs.on.delete(s.id); changed(); } });
         const ps = Object.entries(prefs.params[s.id]).map(([k, v]) => el('label', { class: 'ind-p' }, PARAM_LABEL[k] || k,
           el('input', { class: 'inp', type: 'number', value: v, step: v < 1 ? 0.01 : v % 1 ? 0.1 : 1, min: v < 1 ? 0.01 : 1, max: 400, onchange: (e) => { const x = Number(e.target.value); if (x > 0) { prefs.params[s.id][k] = x; if (prefs.on.has(s.id)) changed(); else savePrefs(prefs); } } })));
-        return el('div', { class: 'ind-item' }, el('label', { class: 'ind-on' }, cb, el('span', {}, el('b', { text: s.name }), el('small', { text: s.where === 'pane' ? ' own pane' : ' on price' }))),
+        return el('div', { class: 'ind-item', 'data-id': s.id }, el('label', { class: 'ind-on' }, cb, el('span', {}, el('b', { text: s.name }), el('small', { text: s.where === 'pane' ? ' own pane' : ' on price' }))),
           el('p', { class: 'note', text: s.help }), ps.length ? el('div', { class: 'ind-ps' }, ...ps) : null);
       })));
     pop.replaceChildren(el('div', { class: 'ind-head' }, el('b', { text: 'Indicators' }), el('span', { class: 'note', text: 'Tick what you want on the chart. Fewer is clearer: try a preset.' }),
@@ -280,6 +337,8 @@ export function indicatorMenu(prefs, onChange) {
     else { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', esc); }
   }
   btn.addEventListener('click', () => toggle());
-  label();
-  return { el: wrap, refresh: label };
+  count();
+  // Open at one study (the gear in the chart legend) and flash it.
+  const open = (id) => { toggle(true); const it = pop.querySelector(`.ind-item[data-id="${id}"]`); if (it) { it.scrollIntoView({ block: 'center' }); it.classList.add('flash'); it.querySelector('input[type=number]')?.focus(); } };
+  return { el: wrap, refresh: count, open };
 }

@@ -178,7 +178,8 @@ export function alignTo(bars, points, tol = 0) {
 // ---------------- Catalogue ----------------
 // Each study: id, name, group, where ('price' overlays the candles, 'pane' gets its own strip below), params, a
 // beginner-level help line, and compute(bars, p, ctx) → { lines, hist?, levels?, range?, unit?, note? }.
-// Line colors are token names (c1..c7, up, down, muted) that the chart maps to CSS colors.
+// Line colors are token names (c1..c8, up, down, muted) that the chart maps to CSS colors; each price overlay has its own
+// hue so lines can be told apart. fills: [{ up, lo, color, alpha }] shades a band between two lines. short(p): legend label.
 // ctx: { closes, perYear, intraday, vix, iv, pcr, chain } (external series are already aligned to bars).
 
 export const GROUPS = [
@@ -194,63 +195,63 @@ const L = (name, color, data, extra = {}) => ({ name, color, data, ...extra });
 export const STUDIES = [
   // Trend & drift
   { id: 'sma1', name: 'SMA', group: 'trend', where: 'price', params: { n: 20 }, help: 'Simple moving average: the plain average of the last n closes. Price above it is a sign of an uptrend.',
-    compute: (b, p, x) => ({ lines: [L(`SMA ${p.n}`, 'c1', sma(x.closes, p.n))] }) },
+    short: (p) => `SMA ${p.n}`, compute: (b, p, x) => ({ lines: [L(`SMA ${p.n}`, 'c5', sma(x.closes, p.n))] }) },
   { id: 'sma2', name: 'SMA (slow)', group: 'trend', where: 'price', params: { n: 50 }, help: 'A slower average. When the fast average crosses above the slow one, traders call it a bullish crossover.',
-    compute: (b, p, x) => ({ lines: [L(`SMA ${p.n}`, 'c2', sma(x.closes, p.n))] }) },
+    short: (p) => `SMA ${p.n}`, compute: (b, p, x) => ({ lines: [L(`SMA ${p.n}`, 'c2', sma(x.closes, p.n), { width: 2 })] }) },
   { id: 'sma3', name: 'SMA (long)', group: 'trend', where: 'price', params: { n: 200 }, help: 'The 200-day average is the line many investors use to separate a bull market from a bear market.',
-    compute: (b, p, x) => ({ lines: [L(`SMA ${p.n}`, 'c6', sma(x.closes, p.n))] }) },
+    short: (p) => `SMA ${p.n}`, compute: (b, p, x) => ({ lines: [L(`SMA ${p.n}`, 'c4', sma(x.closes, p.n), { width: 2 })] }) },
   { id: 'ema1', name: 'EMA (fast)', group: 'trend', where: 'price', params: { n: 9 }, help: 'Exponential moving average: like an SMA but weights recent prices more, so it turns sooner.',
-    compute: (b, p, x) => ({ lines: [L(`EMA ${p.n}`, 'c3', ema(x.closes, p.n))] }) },
+    short: (p) => `EMA ${p.n}`, compute: (b, p, x) => ({ lines: [L(`EMA ${p.n}`, 'c7', ema(x.closes, p.n))] }) },
   { id: 'ema2', name: 'EMA (slow)', group: 'trend', where: 'price', params: { n: 21 }, help: 'A slower exponential average. Fast EMA above slow EMA is a common short-term uptrend signal.',
-    compute: (b, p, x) => ({ lines: [L(`EMA ${p.n}`, 'c4', ema(x.closes, p.n))] }) },
+    short: (p) => `EMA ${p.n}`, compute: (b, p, x) => ({ lines: [L(`EMA ${p.n}`, 'c1', ema(x.closes, p.n))] }) },
   { id: 'supertrend', name: 'Supertrend', group: 'trend', where: 'price', params: { n: 10, mult: 3 }, help: 'A trailing stop line: green under the price in an uptrend, red above it in a downtrend. A flip marks a trend change.',
-    compute: (b, p) => { const s = supertrend(b, p.n, p.mult); return { lines: [L(`Supertrend ${p.n}, ${p.mult}`, 'up', s.line, { colors: s.dir.map((d) => (d === 1 ? 'up' : d === -1 ? 'down' : null)), width: 2 })] }; } },
+    short: (p) => `Supertrend ${p.n} ${p.mult}`, compute: (b, p) => { const s = supertrend(b, p.n, p.mult); return { lines: [L(`Supertrend ${p.n}, ${p.mult}`, 'up', s.line, { colors: s.dir.map((d) => (d === 1 ? 'up' : d === -1 ? 'down' : null)), width: 2 })] }; } },
   { id: 'psar', name: 'Parabolic SAR', group: 'trend', where: 'price', params: { step: 0.02, max: 0.2 }, help: 'Dots that trail the price. Dots below = uptrend, above = downtrend. Traders use them as stop-loss levels.',
-    compute: (b, p) => ({ lines: [L('SAR', 'c5', psar(b, p.step, p.max), { dots: true })] }) },
+    short: (p) => `SAR ${p.step} ${p.max}`, compute: (b, p) => ({ lines: [L('SAR', 'c6', psar(b, p.step, p.max), { dots: true })] }) },
   { id: 'donchian', name: 'Donchian channel', group: 'trend', where: 'price', params: { n: 20 }, help: 'The highest high and lowest low of the last n bars. A close outside it is a breakout.',
-    compute: (b, p) => { const d = donchian(b, p.n); return { lines: [L(`High ${p.n}`, 'muted', d.up, { dashed: true }), L(`Low ${p.n}`, 'muted', d.lo, { dashed: true })] }; } },
-  { id: 'adx', name: 'ADX / DMI', group: 'trend', where: 'pane', params: { n: 14 }, help: 'ADX measures trend strength: above 25 is a real trend, below 20 is a range (good for option sellers). +DI above −DI means buyers are in control.',
+    short: (p) => `DC ${p.n}`, compute: (b, p) => { const d = donchian(b, p.n); return { lines: [L(`High ${p.n}`, 'c8', d.up), L(`Low ${p.n}`, 'c8', d.lo)], fills: [{ up: d.up, lo: d.lo, color: 'c8', alpha: 0.05 }] }; } },
+  { id: 'adx', name: 'ADX / DMI', short: (p) => `ADX ${p.n}`, group: 'trend', where: 'pane', params: { n: 14 }, help: 'ADX measures trend strength: above 25 is a real trend, below 20 is a range (good for option sellers). +DI above −DI means buyers are in control.',
     compute: (b, p) => { const a = adx(b, p.n); return { lines: [L('ADX', 'c1', a.adx, { width: 2 }), L('+DI', 'up', a.pdi), L('−DI', 'down', a.mdi)], levels: [25, 20] }; } },
-  { id: 'drift', name: 'Drift', group: 'trend', where: 'pane', params: { n: 20 }, unit: '%/yr', help: 'The average return per bar over the last n bars, scaled to a year. The steady push behind the price: above 0 it has been climbing.',
+  { id: 'drift', name: 'Drift', short: (p) => `Drift ${p.n}`, group: 'trend', where: 'pane', params: { n: 20 }, unit: '%/yr', help: 'The average return per bar over the last n bars, scaled to a year. The steady push behind the price: above 0 it has been climbing.',
     compute: (b, p, x) => ({ lines: [L(`Drift ${p.n}`, 'c2', drift(x.closes, p.n, x.perYear), { width: 2 })], levels: [0], unit: '%' }) },
   // Volatility
   { id: 'bb', name: 'Bollinger Bands', group: 'vol', where: 'price', params: { n: 20, k: 2 }, help: 'An average with bands k standard deviations away. Bands squeeze when the market is quiet and widen when it moves; quiet often comes before a big move.',
-    compute: (b, p, x) => { const r = bollinger(x.closes, p.n, p.k); return { lines: [L('Upper', 'c3', r.up), L(`Middle ${p.n}`, 'c3', r.mid, { dashed: true }), L('Lower', 'c3', r.lo)] }; } },
+    short: (p) => `BB ${p.n} ${p.k}`, compute: (b, p, x) => { const r = bollinger(x.closes, p.n, p.k); return { lines: [L(`Basis ${p.n}`, 'c2', r.mid, { dashed: true }), L('Upper', 'c3', r.up), L('Lower', 'c3', r.lo)], fills: [{ up: r.up, lo: r.lo, color: 'c3', alpha: 0.08 }] }; } },
   { id: 'keltner', name: 'Keltner channel', group: 'vol', where: 'price', params: { n: 20, mult: 1.5 }, help: 'An EMA with bands set by the average true range. When the Bollinger Bands sit inside it, volatility is "squeezed".',
-    compute: (b, p) => { const r = keltner(b, p.n, p.mult); return { lines: [L('Keltner up', 'c4', r.up, { dashed: true }), L('Keltner low', 'c4', r.lo, { dashed: true })] }; } },
-  { id: 'bbw', name: 'Bollinger width', group: 'vol', where: 'pane', params: { n: 20, k: 2 }, unit: '%', help: 'How wide the Bollinger Bands are, as % of price. Low readings mean a squeeze: options are often cheap just before a breakout.',
+    short: (p) => `KC ${p.n} ${p.mult}`, compute: (b, p) => { const r = keltner(b, p.n, p.mult); return { lines: [L('Upper', 'c4', r.up, { dashed: true }), L('Lower', 'c4', r.lo, { dashed: true })], fills: [{ up: r.up, lo: r.lo, color: 'c4', alpha: 0.05 }] }; } },
+  { id: 'bbw', name: 'Bollinger width', short: (p) => `BBW ${p.n} ${p.k}`, group: 'vol', where: 'pane', params: { n: 20, k: 2 }, unit: '%', help: 'How wide the Bollinger Bands are, as % of price. Low readings mean a squeeze: options are often cheap just before a breakout.',
     compute: (b, p, x) => ({ lines: [L('Band width', 'c3', bollinger(x.closes, p.n, p.k).width, { width: 2 })], unit: '%' }) },
-  { id: 'atr', name: 'ATR', group: 'vol', where: 'pane', params: { n: 14 }, unit: 'pts', help: 'Average true range: the typical size of one bar\'s move in index points, gaps included. Useful for setting stop-losses.',
+  { id: 'atr', name: 'ATR', short: (p) => `ATR ${p.n}`, group: 'vol', where: 'pane', params: { n: 14 }, unit: 'pts', help: 'Average true range: the typical size of one bar\'s move in index points, gaps included. Useful for setting stop-losses.',
     compute: (b, p) => ({ lines: [L(`ATR ${p.n}`, 'c5', atr(b, p.n), { width: 2 })], unit: 'pts' }) },
-  { id: 'rv', name: 'Realized volatility', group: 'vol', where: 'pane', params: { n: 20 }, unit: '%', help: 'How much the index actually moved, as a yearly %: from closes, and from each bar\'s high–low range (Parkinson). Compare with implied vol.',
+  { id: 'rv', name: 'Realized volatility', short: (p) => `RV ${p.n}`, group: 'vol', where: 'pane', params: { n: 20 }, unit: '%', help: 'How much the index actually moved, as a yearly %: from closes, and from each bar\'s high–low range (Parkinson). Compare with implied vol.',
     // One-minute points have no high or low, so the high–low estimate is daily only.
     compute: (b, p, x) => ({ lines: [L(`Close-to-close ${p.n}`, 'c1', realizedVol(x.closes, p.n, x.perYear), { width: 2 }), ...(x.intraday ? [] : [L('High–low', 'c6', parkinsonVol(b, p.n, x.perYear))])], unit: '%' }) },
   // Momentum
-  { id: 'rsi', name: 'RSI', group: 'mom', where: 'pane', params: { n: 14 }, help: 'Relative strength index, 0–100. Above 70 the index is "overbought" (ran up fast), below 30 "oversold". Fades and divergences hint at a turn.',
+  { id: 'rsi', name: 'RSI', short: (p) => `RSI ${p.n}`, group: 'mom', where: 'pane', params: { n: 14 }, help: 'Relative strength index, 0–100. Above 70 the index is "overbought" (ran up fast), below 30 "oversold". Fades and divergences hint at a turn.',
     compute: (b, p, x) => ({ lines: [L(`RSI ${p.n}`, 'c3', rsi(x.closes, p.n), { width: 2 })], levels: [70, 50, 30], range: [0, 100] }) },
-  { id: 'macd', name: 'MACD', group: 'mom', where: 'pane', params: { fast: 12, slow: 26, signal: 9 }, help: 'Gap between a fast and slow EMA. MACD crossing above its signal line is bullish; bars show the gap between them growing or shrinking.',
+  { id: 'macd', name: 'MACD', short: (p) => `MACD ${p.fast} ${p.slow} ${p.signal}`, group: 'mom', where: 'pane', params: { fast: 12, slow: 26, signal: 9 }, help: 'Gap between a fast and slow EMA. MACD crossing above its signal line is bullish; bars show the gap between them growing or shrinking.',
     compute: (b, p, x) => { const m = macd(x.closes, p.fast, p.slow, p.signal); return { lines: [L('MACD', 'c1', m.line, { width: 2 }), L('Signal', 'c2', m.signal)], hist: L('Histogram', 'up', m.hist), levels: [0] }; } },
-  { id: 'stoch', name: 'Stochastic', group: 'mom', where: 'pane', params: { n: 14, smooth: 3, d: 3 }, help: 'Where the close sits in the recent high–low range, 0–100. Above 80 near the top of the range, below 20 near the bottom.',
+  { id: 'stoch', name: 'Stochastic', short: (p) => `Stoch ${p.n} ${p.smooth} ${p.d}`, group: 'mom', where: 'pane', params: { n: 14, smooth: 3, d: 3 }, help: 'Where the close sits in the recent high–low range, 0–100. Above 80 near the top of the range, below 20 near the bottom.',
     compute: (b, p) => { const s = stochastic(b, p.n, p.smooth, p.d); return { lines: [L('%K', 'c1', s.k, { width: 2 }), L('%D', 'c2', s.d)], levels: [80, 20], range: [0, 100] }; } },
-  { id: 'roc', name: 'Rate of change', group: 'mom', where: 'pane', params: { n: 10 }, unit: '%', help: 'Percent change over the last n bars. Shows how fast the index is moving and whether that speed is fading.',
+  { id: 'roc', name: 'Rate of change', short: (p) => `ROC ${p.n}`, group: 'mom', where: 'pane', params: { n: 10 }, unit: '%', help: 'Percent change over the last n bars. Shows how fast the index is moving and whether that speed is fading.',
     compute: (b, p, x) => ({ lines: [L(`ROC ${p.n}`, 'c4', roc(x.closes, p.n), { width: 2 })], levels: [0], unit: '%' }) },
-  { id: 'cci', name: 'CCI', group: 'mom', where: 'pane', params: { n: 20 }, help: 'Commodity channel index: how far the price is from its average, in units of typical deviation. Beyond ±100 is a strong push.',
+  { id: 'cci', name: 'CCI', short: (p) => `CCI ${p.n}`, group: 'mom', where: 'pane', params: { n: 20 }, help: 'Commodity channel index: how far the price is from its average, in units of typical deviation. Beyond ±100 is a strong push.',
     compute: (b, p) => ({ lines: [L(`CCI ${p.n}`, 'c5', cci(b, p.n), { width: 2 })], levels: [100, 0, -100] }) },
   // Options
-  { id: 'iv', name: 'ATM implied vol', group: 'opt', where: 'pane', needs: 'iv', params: { n: 20 }, unit: '%', help: 'What options are pricing in (at the money, expiry a week or more out) against what the index actually did. IV above realized = options are expensive.',
+  { id: 'iv', name: 'ATM implied vol', short: () => 'ATM IV', group: 'opt', where: 'pane', needs: 'iv', params: { n: 20 }, unit: '%', help: 'What options are pricing in (at the money, expiry a week or more out) against what the index actually did. IV above realized = options are expensive.',
     compute: (b, p, x) => ({ lines: [L('ATM IV', 'c1', x.iv, { width: 2 }), L(`Realized ${p.n}`, 'c6', realizedVol(x.closes, p.n, x.perYear), { dashed: true })], unit: '%', rank: true }) },
-  { id: 'ivrv', name: 'IV − realized spread', group: 'opt', where: 'pane', needs: 'iv', params: { n: 20 }, unit: 'pts', help: 'Implied vol minus realized vol. Above 0 option sellers are being paid extra for the risk; below 0 option buyers are getting a bargain.',
+  { id: 'ivrv', name: 'IV − realized spread', short: (p) => `IV − RV ${p.n}`, group: 'opt', where: 'pane', needs: 'iv', params: { n: 20 }, unit: 'pts', help: 'Implied vol minus realized vol. Above 0 option sellers are being paid extra for the risk; below 0 option buyers are getting a bargain.',
     compute: (b, p, x) => { const r = realizedVol(x.closes, p.n, x.perYear); return { lines: [], hist: L('IV − RV', 'up', x.iv.map((v, i) => (v == null || r[i] == null ? null : v - r[i]))), levels: [0], unit: 'pts' }; } },
-  { id: 'emove', name: 'Expected move', group: 'opt', where: 'price', needs: 'chain', params: {}, help: 'The ±1 standard deviation range options price in by the analysis expiry. The index ends inside it about two times in three.',
+  { id: 'emove', name: 'Expected move', short: () => 'Exp. move', group: 'opt', where: 'price', needs: 'chain', params: {}, help: 'The ±1 standard deviation range options price in by the analysis expiry. The index ends inside it about two times in three.',
     compute: (b, p, x) => ({ lines: [], prices: x.chain?.move ? [{ price: x.chain.spot + x.chain.move, title: '+1σ by expiry', color: 'c5' }, { price: x.chain.spot - x.chain.move, title: '−1σ by expiry', color: 'c5' }] : [] }) },
-  { id: 'walls', name: 'OI walls & max pain', group: 'opt', where: 'price', needs: 'chain', params: {}, help: 'The strikes with the most open calls (a ceiling) and puts (a floor), and max pain, where the most options expire worthless.',
+  { id: 'walls', name: 'OI walls & max pain', short: () => 'OI walls', group: 'opt', where: 'price', needs: 'chain', params: {}, help: 'The strikes with the most open calls (a ceiling) and puts (a floor), and max pain, where the most options expire worthless.',
     compute: (b, p, x) => ({ lines: [], prices: x.chain ? [{ price: x.chain.callWall, title: 'Call wall', color: 'down' }, { price: x.chain.putWall, title: 'Put wall', color: 'up' }, { price: x.chain.maxPain, title: 'Max pain', color: 'muted' }] : [] }) },
   // Sentiment & shocks
-  { id: 'vix', name: 'India VIX', group: 'sent', where: 'pane', needs: 'vix', params: {}, help: 'The market\'s fear gauge. Spikes mark panics; option premiums rise and fall with it.',
+  { id: 'vix', name: 'India VIX', short: () => 'India VIX', group: 'sent', where: 'pane', needs: 'vix', params: {}, help: 'The market\'s fear gauge. Spikes mark panics; option premiums rise and fall with it.',
     compute: (b, p, x) => ({ lines: [L('India VIX', 'c2', x.vix, { width: 2 })], levels: [24, 18, 13], rank: true }) },
-  { id: 'pcr', name: 'Put–call ratio', group: 'sent', where: 'pane', needs: 'pcr', params: {}, help: 'Open puts ÷ open calls in the nearest expiry. High (above ~1.3) means heavy put writing or hedging; very low means complacency. Extremes often come before reversals.',
+  { id: 'pcr', name: 'Put–call ratio', short: () => 'PCR', group: 'sent', where: 'pane', needs: 'pcr', params: {}, help: 'Open puts ÷ open calls in the nearest expiry. High (above ~1.3) means heavy put writing or hedging; very low means complacency. Extremes often come before reversals.',
     compute: (b, p, x) => ({ lines: [L('PCR (OI)', 'c4', x.pcr, { width: 2 })], levels: [1.3, 1, 0.7] }) },
-  { id: 'shocks', name: 'Shock moves', group: 'sent', where: 'price', params: { n: 20, z: 2.5 }, help: 'Marks bars where the index moved far more than usual (z bigger than the threshold), and big jumps in India VIX. These are where news hit.',
+  { id: 'shocks', name: 'Shock moves', short: (p) => `Shocks ${p.z}σ`, group: 'sent', where: 'price', params: { n: 20, z: 2.5 }, help: 'Marks bars where the index moved far more than usual (z bigger than the threshold), and big jumps in India VIX. These are where news hit.',
     compute: (b, p, x) => {
       // Minute bars throw up 2–3σ moves every day, so the intraday view only marks the really big ones.
       const z = moveZ(x.closes, p.n), marks = [], lim = x.intraday ? Math.max(p.z, 4) : p.z;
@@ -258,7 +259,7 @@ export const STUDIES = [
       if (!x.intraday) x.vix.forEach((v, i) => { const pv = x.vix[i - 1]; if (v != null && pv && v / pv - 1 >= 0.15 && !marks.some((m) => m.i === i)) marks.push({ i, up: false, text: 'VIX↑', title: `India VIX jumped ${Math.round((v / pv - 1) * 100)}%` }); });
       return { lines: [], marks };
     } },
-  { id: 'events', name: 'Events & news', group: 'sent', where: 'price', needs: 'events', params: {}, help: 'Known market events (budgets, elections, wars, policy shocks) and shock headlines from the news panel, pinned to the chart.',
+  { id: 'events', name: 'Events & news', short: () => 'Events', group: 'sent', where: 'price', needs: 'events', params: {}, help: 'Known market events (budgets, elections, wars, policy shocks) and shock headlines from the news panel, pinned to the chart.',
     compute: () => ({ lines: [] }) },
 ];
 

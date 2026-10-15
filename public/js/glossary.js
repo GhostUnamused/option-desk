@@ -63,7 +63,7 @@ export const GLOSSARY = {
   'charge stamp': 'Stamp duty paid to the government when you buy: 0.003% of the premium.',
   'charge gst': '18% GST on the brokerage, exchange charges and SEBI fee.',
   'p&l': 'Profit and loss: how much you are up (green) or down (red).',
-  'lot': 'How many units make one tradable bundle (lot) for this index.',
+  'lot': 'How many units make one tradable bundle (lot): index units for an index, shares for a stock.',
   'prev close': 'Where the index closed on the previous trading day. Today\'s change is measured from here.',
   '52-week range': 'The lowest and highest levels of the past year. The marker shows where the index is now.',
   "today's range": 'The lowest and highest levels traded so far today.',
