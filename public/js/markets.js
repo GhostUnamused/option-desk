@@ -1,5 +1,5 @@
 // Markets tab: index chart with indicators, a plain-English market read, news & sentiment, and all index quotes.
-import { api, el, $, inr2, inr0, pct, tone, pts, stdev, fmtExpiry, daysTo, compact, vixMood } from './util.js';
+import { api, el, $, inr2, inr0, pct, tone, pts, stdev, fmtExpiry, daysTo, compact, vixMood, store } from './util.js';
 import { term } from './glossary.js';
 import { S, on, cfg, quote, loadChain, analysisExpiry, loadExpiries } from './state.js';
 import { yearsTo, now } from './bs.js';
@@ -8,21 +8,22 @@ import { open as openStocks, available as stocksAvailable } from './stocks.js';
 import { alignTo, STUDIES } from './indicators.js';
 import * as news from './newsfeed.js';
 
-let root, chart, range = '1D', dailyCache = new Map(), lastDraw = 0, readBox, tableBox, prefs, menu, drawSeq = 0;
+let root, chart, range = '1D', chartType = store.get('marketChartType', 'auto'), dailyCache = new Map(), lastDraw = 0, readBox, tableBox, prefs, menu, drawSeq = 0;
 const cached = new Map(); // small time-limited cache for option history and events
 async function memo(key, ms, fn) { const h = cached.get(key); if (h && Date.now() - h.at < ms) return h.v; const v = await fn(); cached.set(key, { at: Date.now(), v }); return v; }
 
 export function init(sec) {
   root = sec;
   prefs = loadPrefs();
-  // Replay has daily prices only, so no intraday view.
-  const ranges = S.meta.replay ? ['1M', '3M', '6M', '1Y'] : ['1D', '1M', '3M', '6M', '1Y'];
-  if (S.meta.replay) range = '3M';
+  // Replay: the 1D view shows the replay day's minutes (up to the replay minute) when they are downloaded.
+  const ranges = ['1D', '1M', '3M', '6M', '1Y'];
+  if (S.meta.replay) range = S.meta.replay.running ? '1D' : '3M';
   const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Chart range' }, ranges.map((r) => el('button', { type: 'button', 'data-r': r, class: r === range ? 'on' : '', text: r, onclick: () => { range = r; seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.r === r)); draw(true); } })));
+  const typeSeg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Chart style' }, [['auto', 'Auto'], ['line', 'Line'], ['candles', 'Candles']].map(([v, text]) => el('button', { type: 'button', 'data-style': v, class: v === chartType ? 'on' : '', text, title: v === 'auto' ? '1D line and daily candles' : `${text} chart`, onclick: () => { chartType = v; store.set('marketChartType', v); typeSeg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.style === v)); draw(true); } })));
   menu = indicatorMenu(prefs, () => draw(false));
   const head = el('div', { class: 'panel-h' },
     el('div', {}, el('h2', { id: 'mkName' }), el('div', {}, el('span', { class: 'big', id: 'mkLast', text: '—' }), ' ', el('span', { id: 'mkChg', class: 'mono' }))),
-    el('span', { class: 'sp' }), menu.el, seg);
+    el('span', { class: 'sp' }), menu.el, seg, typeSeg);
   const legend = el('div', { class: 'legend', id: 'mkLegend' });
   const box = el('div', { class: 'chart', id: 'mkChart' });
   readBox = el('div', { class: 'read' }, el('p', { class: 'note', text: 'Loading the market read…' }));
@@ -39,7 +40,7 @@ export function init(sec) {
   on('quotes', () => { if (S.tab === 'markets') { renderHead(); renderTable(); if (range === '1D') liveTick(); } });
   on('symbol', () => { if (S.tab === 'markets') { draw(true); renderHead(); news.refresh(); } });
   on('expiries', () => { if (S.tab === 'markets') renderRead(); });
-  on('day', () => { dailyCache.clear(); cached.clear(); if (S.tab === 'markets') news.refresh(); });
+  on('day', () => { dailyCache.clear(); cached.clear(); if (S.tab === 'markets') { news.refresh(); if (range === '1D') draw(false); } });
 }
 
 export function show() { if (!chart) makeChart(); renderHead(); renderTable(); draw(true); renderRead(); news.refresh(); }
@@ -86,17 +87,27 @@ async function draw(reset) {
     const newsShocks = async () => { const n = await news.loadNews(sym).catch(() => null); if (n?.hidden) notes.events = n.reason; return (n?.items || []).filter((i) => i.shock?.severity > 1); };
     if (r === '1D') {
       const d = await api(`/api/intraday?symbol=${sym}`);
-      const bars = d.points.map((p) => ({ time: p.t, o: p.v, h: p.v, l: p.v, c: p.v }));
+      const points = d.points;
+      const bars = points.map((p) => ({ time: p.t, o: p.v, h: p.v, l: p.v, c: p.v }));
+      const candleBars = [];
+      for (let i = 0; i < points.length; i += 5) {
+        const group = points.slice(i, i + 5), values = group.map((p) => p.v);
+        if (group.length) candleBars.push({ time: group[group.length - 1].t, o: values[0], h: Math.max(...values), l: Math.min(...values), c: values[values.length - 1] });
+      }
+      const style = chartType === 'auto' ? 'baseline' : chartType;
+      const chartBars = style === 'candles' ? candleBars : bars;
       const [vix, oh, ch, shocks] = await Promise.all([
         want(['vix', 'shocks']) ? api('/api/intraday?symbol=INDIAVIX').catch(() => null) : null,
         want(['iv', 'ivrv', 'pcr']) ? optHistory(sym, 30).catch(() => null) : null,
         want(['emove', 'walls']) ? positioningNow(sym).catch(() => null) : null,
         want(['events']) ? newsShocks() : []]);
       const ip = (k, mul = 1) => (oh?.intraday || []).filter((p) => p[k] != null).map((p) => ({ time: p.t, value: p[k] * mul }));
-      data = { bars, style: 'baseline', base: d.prevClose || d.points[0]?.v || 0, intraday: true, perYear: 252 * 375,
-        vix: alignTo(bars, vix?.points.map((p) => ({ time: p.t, value: p.v })), 180), iv: alignTo(bars, ip('iv', 100), 900), pcr: alignTo(bars, ip('pcr'), 900), chain: ch,
+      data = { bars: chartBars, style, base: d.prevClose || points[0]?.v || 0, intraday: true, perYear: 252 * 375,
+        vix: alignTo(chartBars, vix?.points.map((p) => ({ time: p.t, value: p.v })), 180), iv: alignTo(chartBars, ip('iv', 100), 900), pcr: alignTo(chartBars, ip('pcr'), 900), chain: ch,
         events: shocks.map((i) => ({ time: toChartSec(i.t), title: `${i.title} (${i.source || 'news'})`, kind: 'shock', short: 'News' })), notes };
-      info = `${d.points.length} one-minute points · refreshes every 5 s. Indicator lengths count minutes on this view.`;
+      info = replayMode
+        ? (d.points.length ? `${d.points.length} one-minute points of the replay day${S.meta.replay.running ? `, up to ${S.meta.replay.time}` : ''}. Indicator lengths count minutes on this view.` : 'No minute prices are downloaded for this day. Get them under Minute prices in the Replay tab, or pick 1M to 1Y for daily candles.')
+        : `${d.points.length} one-minute points · refreshes every 5 s.${style === 'candles' ? ' Candles group five points into one bar.' : ''} Indicator lengths count minutes on this view.`;
     } else {
       const days = { '1M': 31, '3M': 92, '6M': 183, '1Y': 366 }[r];
       const fetchDays = Math.min(730, days + Math.ceil(lookback() * 1.5));
@@ -115,12 +126,13 @@ async function draw(reset) {
       const evs = (ev?.events || []).map((e) => ({ time: e.date, title: `${e.title}${e.note ? ': ' + e.note : ''}`, kind: e.kind, short: e.kind === 'scheduled' ? 'Event' : 'Shock' }));
       // Shock headlines of the last few days, pinned to their day.
       for (const i of shocks) evs.push({ time: istDate(i.t), title: `${i.title} (${i.source || 'news'})`, kind: 'shock', short: 'News' });
-      data = { bars, style: 'candles', intraday: false, perYear: 252,
+      const style = chartType === 'auto' ? 'candles' : chartType;
+      data = { bars, style, base: bars[0]?.o || 0, intraday: false, perYear: 252,
         vix: alignTo(bars, vixRows.map((x) => ({ time: x.date, value: x.c }))), iv: alignTo(bars, ohr.filter((x) => x.iv != null).map((x) => ({ time: x.date, value: x.iv * 100 }))),
         pcr: alignTo(bars, ohr.filter((x) => x.pcr != null).map((x) => ({ time: x.date, value: x.pcr }))), chain: ch, events: evs, notes };
-      info = `Daily candles: green closed higher than it opened, red lower. Drag the chart to see earlier days${replayMode && bars.length - from < days * 0.6 * 5 / 7 ? '. Only part of this range is downloaded.' : '.'}`;
+      info = `${style === 'candles' ? 'Daily candles: green closed higher than they opened, red lower.' : 'Daily line shows each day’s close.'} Drag the chart to see earlier days${replayMode && bars.length - from < days * 0.6 * 5 / 7 ? '. Only part of this range is downloaded.' : '.'}`;
     }
-    if (seq !== drawSeq || sym !== S.symbol || r !== range) return;
+    if (seq !== drawSeq || sym !== S.symbol || r !== range || chartType !== (store.get('marketChartType', 'auto'))) return;
     chart.render(data, prefs, reset);
     if (reset && from) chart.main.timeScale().setVisibleLogicalRange({ from, to: data.bars.length + 3 });
     const panes = STUDIES.filter((s) => s.where === 'pane' && prefs.on.has(s.id)).length;

@@ -1,12 +1,14 @@
-// Replay: practise on real past NSE days. A control bar under the tabs moves the replay clock (a day, a week,
-// to the next expiry, or auto-play), and the Replay tab holds session setup, the trade journal, the end-of-session
-// summary, history downloads and settings. The server disguises dates in blind mode, so this file never has to.
+// Replay: practise on real past NSE days. A control bar under the tabs moves the replay clock (a few minutes in a
+// minute-by-minute session, a day, a week, to the next expiry, or auto-play), and the Replay tab holds session setup,
+// the trade journal, the end-of-session summary, history downloads and settings. The server disguises dates in blind
+// mode, so this file never has to.
 import { api, el, $, inr0, inr2, rs, srs, pct, tone, toast, store, fmtDay, fmtExpiry, daysTo, instrument } from './util.js';
 import { term } from './glossary.js';
 import { S, emit, on, newDay } from './state.js';
 import { setClock } from './bs.js';
 
 let root, bar, playing = false, speed = store.get('replaySpeed', 2000), stepping = false, dlTimer = null, status = null;
+let playBy = store.get('replayPlayBy', 'min1'); // what one auto-play step is in a minute-by-minute session: min1 | min5 | day
 const R = () => S.meta.replay;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isoToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -23,6 +25,7 @@ export function init(sec) {
   document.addEventListener('keydown', (e) => {
     if (!R().active || e.target.closest('input, textarea, select, dialog') || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'n' || e.key === 'N') { e.preventDefault(); step('day'); }
+    if ((e.key === 'm' || e.key === 'M') && R().running) { e.preventDefault(); step('minutes', false, 1); }
   });
 }
 
@@ -40,35 +43,48 @@ function renderBar() {
       el('span', { class: 'sp' }), el('button', { class: 'btn sm', type: 'button', text: r.ended ? 'Open summary' : 'Set up replay', onclick: () => emit('goto', 'replay') }));
     return;
   }
-  const dayLabel = r.blind ? `Day ${r.day} · ${fmtDay(r.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' })}` : fmtDay(r.date);
+  const dayLabel = (r.blind ? `Day ${r.day} · ${fmtDay(r.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' })}` : fmtDay(r.date)) + (r.intraday ? ` · ${r.running ? r.time : 'closed'}` : '');
   const nx = r.nextExpiry?.[S.symbol];
-  const exp = nx ? `${S.meta.indices[S.symbol]?.short || S.symbol} ${nx.kind} expiry ${r.blind ? '' : fmtExpiry(nx.date) + ', '}in ${Math.round(daysTo(nx.date))} day${Math.round(daysTo(nx.date)) === 1 ? '' : 's'}` : '';
-  const btn = (text, title, fn) => el('button', { type: 'button', text, title, disabled: stepping || playing || !r.hasNext, onclick: fn });
-  const play = el('button', { class: 'play' + (playing ? ' on' : ''), type: 'button', id: 'rpPlay', 'aria-pressed': String(playing), text: playing ? 'Pause' : 'Play', title: 'Move forward one trading day at a time until you press Pause. Pauses while an order ticket is open.', disabled: !r.hasNext && !playing, onclick: togglePlay });
+  const dleft = nx ? Math.round(daysTo(nx.date)) : 0;
+  const exp = nx ? `${S.meta.indices[S.symbol]?.short || S.symbol} ${nx.kind} expiry ${nx.date === r.date ? 'today, at 15:30' : `${r.blind ? '' : fmtExpiry(nx.date) + ', '}in ${dleft} day${dleft === 1 ? '' : 's'}`}` : '';
+  const btn = (text, title, fn, can = r.hasNext) => el('button', { type: 'button', text, title, disabled: stepping || playing || !can, onclick: fn });
+  const minuteMode = r.intraday && r.running;
+  const playTitle = minuteMode && playBy !== 'day' ? `Move forward ${playBy === 'min5' ? 'five minutes' : 'one minute'} at a time until you press Pause, then on to the next day. Pauses while an order ticket is open.` : 'Move forward one trading day at a time until you press Pause. Pauses while an order ticket is open.';
+  const play = el('button', { class: 'play' + (playing ? ' on' : ''), type: 'button', id: 'rpPlay', 'aria-pressed': String(playing), text: playing ? 'Pause' : 'Play', title: playTitle, disabled: !r.hasNext && !r.running && !playing, onclick: togglePlay });
+  const unit = r.intraday && playBy !== 'day' ? 'a step' : 'a day';
   const sp = el('select', { class: 'sel sm', 'aria-label': 'Auto-play speed', title: 'Auto-play speed', onchange: (e) => { speed = +e.target.value; store.set('replaySpeed', speed); } },
-    [[4000, 'Slow'], [2000, 'Normal'], [800, 'Fast']].map(([v, t]) => new Option(`${t} (${v / 1000} s a day)`, v, false, v === speed)));
+    [[4000, 'Slow'], [2000, 'Normal'], [800, 'Fast']].map(([v, t]) => new Option(`${t} (${v / 1000} s ${unit})`, v, false, v === speed)));
+  const by = r.intraday ? el('select', { class: 'sel sm', 'aria-label': 'Auto-play step', title: 'How far each auto-play step moves', onchange: (e) => { playBy = e.target.value; store.set('replayPlayBy', playBy); renderBar(); } },
+    [['min1', 'Play by 1 min'], ['min5', 'Play by 5 min'], ['day', 'Play by day']].map(([v, t]) => new Option(t, v, false, v === playBy))) : '';
+  const tip = r.intraday && !r.running ? (r.hasNext ? 'The market has closed for this day. Step to the next day.' : '') : '';
   bar.replaceChildren(
     el('span', { class: 'pill warn', text: r.blind ? 'Blind replay' : 'Replay' }),
-    el('b', { class: 'rp-date', text: dayLabel, title: r.blind ? 'Blind mode: the real date is hidden until you end the session.' : 'Prices are this day\'s closing prices.' }),
-    el('span', { class: 'note', text: r.blind ? `${exp}` : `Day ${r.day} of your session${exp ? ' · ' + exp : ''}` }),
+    el('b', { class: 'rp-date', text: dayLabel, title: r.blind ? 'Blind mode: the real date is hidden until you end the session.' : minuteMode ? `Prices are the last trades before ${r.time} IST on this day.` : 'Prices are this day\'s closing prices.' }),
+    el('span', { class: 'note', text: tip || (r.blind ? `${exp}` : `Day ${r.day} of your session${exp ? ' · ' + exp : ''}`) }),
     el('span', { class: 'sp' }),
+    minuteMode ? el('div', { class: 'transport', role: 'group', 'aria-label': 'Move forward within the day' },
+      btn('+1 min', 'One minute ahead (shortcut: M)', () => step('minutes', false, 1), true),
+      btn('+5 min', 'Five minutes ahead', () => step('minutes', false, 5), true),
+      btn('+15 min', 'Fifteen minutes ahead', () => step('minutes', false, 15), true),
+      btn('To close', `Jump to 15:30, when the day closes (${r.minutesLeft} minutes from now). Positions expiring today settle then.`, () => step('close'), true)) : '',
     el('div', { class: 'transport', role: 'group', 'aria-label': 'Move forward in time' },
-      btn('+1 day', 'Next trading day (shortcut: N)', () => step('day')),
+      btn(r.intraday ? 'Next day' : '+1 day', `Next trading day${r.intraday ? ', from its opening minute' : ''} (shortcut: N)`, () => step('day')),
       btn('+1 week', 'Jump a week ahead, one trading day at a time', () => step('week')),
-      btn('Next expiry', `Jump to the next ${S.meta.indices[S.symbol]?.short || ''} expiry day. Positions expiring then are settled at that day's close.`, () => step('expiry')),
+      btn('Next expiry', `Jump to the next ${S.meta.indices[S.symbol]?.short || ''} expiry day${r.intraday ? ' (or, on expiry day, to its close)' : ''}. Positions expiring then are settled at that day's close.`, () => step('expiry')),
       play),
-    sp,
-    !r.hasNext ? el('span', { class: 'note', text: 'End of downloaded history' }) : '');
+    by || '', sp,
+    !r.hasNext && !r.running ? el('span', { class: 'note', text: 'End of downloaded history' }) : '');
 }
 
-async function step(by, quiet = false) {
+async function step(by, quiet = false, n = 1) {
   if (stepping) return false;
   stepping = true; if (!playing) renderBar();
   try {
-    const r = await api('/api/replay/step', { by, symbol: S.symbol });
+    const r = await api('/api/replay/step', { by, symbol: S.symbol, n });
     await afterDay();
     if (r.settled) toast(`${r.settled} position${r.settled > 1 ? 's' : ''} settled at expiry. See the Replay account tab.`, 'ok');
     else if (!quiet && r.days > 1) toast(`Moved ${r.days} trading days ahead.`);
+    else if (!quiet && (by === 'minutes' || by === 'close') && !R().running) toast('The market has closed for the day (15:30). Step to the next day when you are ready.');
     return true;
   } catch (e) { toast(e.message, 'err'); return false; }
   finally { stepping = false; renderBar(); }
@@ -83,7 +99,11 @@ async function afterDay() {
 async function togglePlay() {
   playing = !playing; renderBar();
   while (playing) {
-    if (!$('#ticket').open && !document.hidden) { const ok = await step('day', true); if (!ok || !R().hasNext) { playing = false; renderBar(); break; } }
+    if (!$('#ticket').open && !document.hidden) {
+      const r = R(), byMinute = r.intraday && r.running && playBy !== 'day';
+      const ok = byMinute ? await step('minutes', true, playBy === 'min5' ? 5 : 1) : await step('day', true);
+      if (!ok || (!R().hasNext && !R().running)) { playing = false; renderBar(); break; }
+    }
     await sleep(speed);
   }
 }
@@ -99,13 +119,13 @@ async function renderTab() {
     if (status.ended) parts.push(await journalPanel(true));
     parts.push(startPanel());
   }
-  parts.push(dataPanel(), el('div', { class: 'cols' }, howPanel(), settingsPanel()));
+  parts.push(dataPanel(), minutePanel(), el('div', { class: 'cols' }, howPanel(), settingsPanel()));
   root.replaceChildren(intro(), ...parts.filter(Boolean));
-  if (status.download?.running) watchDownload();
+  if (status.download?.running || status.minutes?.download?.running) watchDownload();
 }
 
 function intro() {
-  return el('p', { class: 'intro' }, el('b', { text: 'Practise on real past days.' }), ' Pick a day in history and trade it at that day\'s closing prices, then step forward a day, a week or to the next expiry. Your replay balance is separate from the live paper account, so practise freely.');
+  return el('p', { class: 'intro' }, el('b', { text: 'Practise on real past days.' }), ' Pick a day in history and trade it at that day\'s closing prices, or minute by minute through the day, then step forward a few minutes, a day, a week or to the next expiry. Your replay balance is separate from the live paper account, so practise freely.');
 }
 
 const stat = (k, v, cls, s) => el('div', { class: 'stat' }, el('div', { class: 'k' }, term(k)), el('div', { class: 'v ' + (cls || ''), text: v }), s ? el('div', { class: 's', text: s }) : null);
@@ -125,7 +145,7 @@ function sessionPanel() {
       stat('Replay day', r.blind ? `Day ${r.day}` : fmtDay(r.date), '', r.blind ? 'Real date hidden until the end' : `Day ${r.day} since ${fmtDay(r.startDate)}`),
       a ? stat('Account value', rs(a.equity), '', `Started with ${rs(a.startBalance)}`) : null,
       a ? stat('Total P&L', srs(a.totalPnl), tone(a.totalPnl), pct(a.totalPnl / a.startBalance * 100) + ' since start') : null,
-      a ? stat('Open positions', String(a.positions.length), '', a.positions.length ? 'Marked at the day\'s close' : 'Nothing open') : null),
+      a ? stat('Open positions', String(a.positions.length), '', a.positions.length ? (r.running ? `Marked at the last trades before ${r.time}` : 'Marked at the day\'s close') : 'Nothing open') : null),
     el('p', { class: 'note', style: { marginTop: '10px' }, text: 'Ending the session closes nothing: open positions are valued at the last close. You then see your full summary' + (r.blind ? ' and the real dates.' : '.') }));
 }
 
@@ -217,13 +237,18 @@ function startPanel() {
   const suggested = store.get('replayStart', null) || (() => { const d = new Date(Date.parse(c.first) + 90 * 864e5).toISOString().slice(0, 10); return d < c.last ? d : c.first; })();
   const date = el('input', { class: 'inp', type: 'date', id: 'rpStart', min: minStart, max: maxStart, value: suggested < minStart || suggested > maxStart ? minStart : suggested, style: { width: '11em' } });
   const rand = el('input', { type: 'checkbox', id: 'rpRandom', onchange: () => { date.disabled = rand.checked; } });
+  const mc = status.minutes?.coverage;
+  const intraday = el('input', { type: 'checkbox', id: 'rpIntraday', disabled: !mc?.days, checked: Boolean(mc?.days) && store.get('replayIntraday', false), onchange: () => {
+    store.set('replayIntraday', intraday.checked);
+    if (intraday.checked && mc.first && (date.value < mc.first || date.value > mc.last)) date.value = mc.first;
+  } });
   const blind = el('input', { type: 'checkbox', id: 'rpBlind', onchange: () => { if (blind.checked && !rand.checked) { rand.checked = true; date.disabled = true; } } });
   const bal = el('input', { class: 'inp', type: 'number', id: 'rpBal', min: '10000', step: '50000', value: String(status.startBalance) });
   const go = el('button', { class: 'btn', type: 'button', text: 'Start session', onclick: async () => {
     go.disabled = true;
     try {
       store.set('replayStart', date.value);
-      await api('/api/replay/start', { date: date.value, random: rand.checked, blind: blind.checked, balance: +bal.value });
+      await api('/api/replay/start', { date: date.value, random: rand.checked, blind: blind.checked, balance: +bal.value, intraday: intraday.checked });
       location.hash = '#markets'; location.reload();
     } catch (e) { toast(e.message, 'err'); go.disabled = false; }
   } });
@@ -235,6 +260,7 @@ function startPanel() {
       el('label', { class: 'f', for: 'rpBal' }, 'Replay balance (₹)', bal),
       el('label', { class: 'check' }, rand, el('span', {}, el('b', { text: 'Random day' }), ' from your history')),
       el('label', { class: 'check' }, blind, el('span', {}, el('b', { text: 'Blind mode' }), ': hide the real date until you finish, so you trade what you see, not what you remember')),
+      el('label', { class: 'check' }, intraday, el('span', {}, el('b', { text: 'Minute by minute' }), mc?.days ? `: watch each day unfold from 09:16 and trade at the prices of that minute. Minute prices downloaded for ${mc.days} day${mc.days === 1 ? '' : 's'}, ${fmtDay(mc.first)} to ${fmtDay(mc.last)}.` : ': download minute prices below first.')),
       go),
     el('p', { class: 'note', style: { marginTop: '10px' }, text: `You have history from ${fmtDay(c.first)} to ${fmtDay(c.last)}. Charts and the market read look back up to a year, so starting a few months after the first day gives them something to show${histDays < 60 ? ' (the day picked has under two months before it)' : ''}. Starting a session replaces the previous one and its balance.` }));
 }
@@ -269,7 +295,54 @@ function dataPanel() {
     el('div', { id: 'rpProgress' }));
 }
 
+// Minute prices: one-minute bars from INDstocks for minute-by-minute sessions.
+function minutePanel() {
+  const m = status.minutes;
+  if (!m) return el('div', { class: 'panel' }, el('h2', { text: 'Minute prices' }), el('p', { class: 'note', style: { marginTop: '6px' }, text: 'Hidden during a blind session, because the list of downloaded days would give the dates away.' }));
+  const c = m.coverage, today = isoToday();
+  const to = el('input', { class: 'inp', type: 'date', id: 'rpMinTo', value: today, max: today, min: m.indexFrom, style: { width: '11em' } });
+  const from = el('input', { class: 'inp', type: 'date', id: 'rpMinFrom', value: back(today, 1), max: today, min: m.indexFrom, style: { width: '11em' } });
+  const preset = (label, months) => el('button', { class: 'btn ghost sm', type: 'button', text: label, onclick: () => { to.value = today; from.value = back(today, months); } });
+  const dl = el('button', { class: 'btn', type: 'button', id: 'rpMinDl', text: 'Download minute prices', disabled: !m.source.connected, onclick: async () => {
+    try { status.minutes.download = await api('/api/replay/minutes/download', { from: from.value, to: to.value }); watchDownload(); }
+    catch (e) { toast(e.message, 'err'); }
+  } });
+  const cov = c.days
+    ? el('div', { class: 'grid' },
+      stat('Minute days from', fmtDay(c.first)), stat('Minute days to', fmtDay(c.last)),
+      stat('Days ready', inr0.format(c.days), '', Object.entries(c.bySymbol).map(([s, n]) => `${S.meta.indices[s]?.short || s}: ${n}`).join(' · ')),
+      stat('Index only', inr0.format(Math.max(0, c.indexDays - c.days)), '', 'Days with an index chart but no option prices'))
+    : el('p', { class: 'note', text: c.indexDays ? `Index minutes for ${c.indexDays} days, but no option minute prices yet.` : 'No minute prices downloaded yet.' });
+  return el('div', { class: 'panel', id: 'rpMin' },
+    el('div', { class: 'panel-h' }, el('h2', { text: 'Minute prices' }), el('span', { class: 'note', text: 'One-minute prices from INDstocks, so a session can walk through each day minute by minute. Downloaded once, kept on this computer.' })),
+    cov,
+    c.needDaily ? el('p', { class: 'warnbox', style: { marginTop: '8px' }, text: `${c.needDaily} day${c.needDaily > 1 ? 's' : ''} with minute prices still need their daily history (open interest and the calendar come from it). Download the same dates in Historical data above.` }) : null,
+    m.source.connected ? null : el('p', { class: 'warnbox', style: { marginTop: '8px' }, text: m.source.problem }),
+    el('div', { class: 'rp-form', style: { marginTop: '12px' } },
+      el('label', { class: 'f', for: 'rpMinFrom' }, 'From', from), el('label', { class: 'f', for: 'rpMinTo' }, 'To', to),
+      el('div', { class: 'rp-presets' }, preset('Last month', 1), preset('3 months', 3), preset('6 months', 6)),
+      dl),
+    el('p', { class: 'note', style: { marginTop: '8px' }, text: `Option prices start with the ${fmtDay(m.optionsFrom)} expiry (the index from ${fmtDay(m.indexFrom)}), and only for contracts that have already expired. For each expiry the strikes around where the index traded are kept. A month takes about a minute and roughly 30 MB. The daily history for the same dates downloads too.` }),
+    el('div', { id: 'rpMinProgress' }));
+}
+
+function renderMinuteProgress() {
+  const box = $('#rpMinProgress'); const d = status?.minutes?.download; if (!box || !d) return;
+  const pctDone = d.total ? Math.round(d.done / d.total * 100) : d.running ? 0 : 100;
+  const msg = d.running
+    ? `${d.current || 'Starting'} · ${d.done} of ${d.total || '…'} steps`
+    : d.cancelled ? `Stopped after ${d.done} of ${d.total} steps.` : `Finished: ${inr0.format(d.bars)} one-minute prices saved${d.failed ? `, ${d.failed} step${d.failed > 1 ? 's' : ''} failed` : ''}.`;
+  box.replaceChildren(
+    el('div', { class: 'rp-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pctDone) }, el('i', { style: { width: pctDone + '%' } })),
+    el('div', { class: 'rp-prog-row' }, el('span', { class: 'note', text: msg }), el('span', { class: 'sp' }),
+      d.running ? el('button', { class: 'btn ghost sm', type: 'button', text: 'Cancel', onclick: () => api('/api/replay/minutes/cancel', {}).catch(() => {}) }) : null),
+    d.error ? el('p', { class: d.running ? 'note' : 'warnbox', text: d.error }) : '',
+    ...(d.notes || []).map((n) => el('p', { class: 'note', text: n })));
+  const btn = $('#rpMinDl'); if (btn) btn.disabled = d.running || !status.minutes.source.connected;
+}
+
 function renderProgress() {
+  renderMinuteProgress();
   const box = $('#rpProgress'); const d = status?.download; if (!box || !d) return;
   const pctDone = d.total ? Math.round(d.done / d.total * 100) : 100;
   const msg = d.running
@@ -279,7 +352,7 @@ function renderProgress() {
     el('div', { class: 'rp-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pctDone) }, el('i', { style: { width: pctDone + '%' } })),
     el('div', { class: 'rp-prog-row' }, el('span', { class: 'note', text: msg }), el('span', { class: 'sp' }),
       d.running ? el('button', { class: 'btn ghost sm', type: 'button', text: 'Cancel', onclick: () => api('/api/replay/download/cancel', {}).catch(() => {}) }) : null),
-    d.error ? el('p', { class: d.running ? 'note' : 'warnbox', text: d.error }) : null);
+    d.error ? el('p', { class: d.running ? 'note' : 'warnbox', text: d.error }) : '');
   const btn = $('#rpDl'); if (btn) btn.disabled = d.running;
 }
 
@@ -287,7 +360,10 @@ function watchDownload() {
   renderProgress();
   clearInterval(dlTimer);
   dlTimer = setInterval(async () => {
-    try { const s = await api('/api/replay'); status.download = s.download; renderProgress(); if (!s.download?.running) { clearInterval(dlTimer); dlTimer = null; await renderTab(); } }
+    try {
+      const s = await api('/api/replay'); status.download = s.download; if (s.minutes) status.minutes.download = s.minutes.download; renderProgress();
+      if (!s.download?.running && !s.minutes?.download?.running) { clearInterval(dlTimer); dlTimer = null; await renderTab(); }
+    }
     catch {}
   }, 1500);
 }
@@ -310,7 +386,7 @@ function howPanel() {
   return el('div', { class: 'panel' },
     el('h2', { text: 'How replay works' }),
     el('ul', { class: 'rp-how' },
-      li('One price per day.', 'Each day uses NSE\'s official closing prices (the bhavcopy). There are no intraday moves, so charts show daily candles.'),
+      li('One price per day, or one a minute.', 'Each day uses NSE\'s official closing prices (the bhavcopy). In a minute-by-minute session the day runs from 09:16 to 15:30 instead: the index chart and option prices are the last trades before each minute, open interest is the previous day\'s, and the day\'s closing prices only appear at 15:30.'),
       li('Fills include slippage.', 'Buys fill a little above the close and sells a little below, more so for strikes far from the index or with few trades that day. Strikes with no trades at all that day cannot be traded.'),
       li('Expiry settles by itself.', 'Positions still open on expiry day close at their value against that day\'s index close, just like the exchange does.'),
       li('The clock only moves forward.', 'You cannot see tomorrow: every number on screen comes from that day or earlier.'),

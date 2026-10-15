@@ -124,6 +124,9 @@ export class StudyChart {
       this.price = this.main.addBaselineSeries({ baseValue: { type: 'price', price: data.base }, topLineColor: t.up, bottomLineColor: t.down, topFillColor1: rgba(t.up, 0.2), topFillColor2: rgba(t.up, 0.02), bottomFillColor1: rgba(t.down, 0.02), bottomFillColor2: rgba(t.down, 0.2), lineWidth: 2 });
       this.price.setData(bars.map((b) => ({ time: b.time, value: b.c })));
       if (data.base) this.price.createPriceLine({ price: data.base, color: t.muted, lineStyle: 2, lineWidth: 1, axisLabelVisible: true, title: 'Prev close' });
+    } else if (data.style === 'line') {
+      this.price = this.main.addLineSeries({ color: t.fg, lineWidth: 2, priceLineVisible: false, crosshairMarkerVisible: true });
+      this.price.setData(bars.map((b) => ({ time: b.time, value: b.c })));
     } else {
       this.price = this.main.addCandlestickSeries({ upColor: t.up, downColor: t.down, borderVisible: false, wickUpColor: t.up, wickDownColor: t.down });
       this.price.setData(bars.map((b) => ({ time: b.time, open: b.o, high: b.h, low: b.l, close: b.c })));

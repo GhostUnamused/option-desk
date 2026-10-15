@@ -12,7 +12,7 @@ export function init(sec) {
   root = sec;
   root.append(
     el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: S.meta.replay ? 'Replay account' : 'Paper account' }), el('span', { class: 'note', id: 'acSince' })), el('div', { class: 'grid', id: 'acStats' })),
-    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Open positions' }), el('span', { class: 'sp' }), el('span', { class: 'note', text: S.meta.replay ? 'Marked at the day\'s closing price.' : 'Marked at the live bid–ask midpoint. Refreshes every 5 s.' }), el('button', { class: 'btn danger sm', type: 'button', id: 'acExitAll', text: 'Exit all', onclick: exitAll })),
+    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Open positions' }), el('span', { class: 'sp' }), el('span', { class: 'note', text: S.meta.replay ? (S.meta.replay.intraday ? 'Marked at the last trade before the replay minute (the closing price once the day ends).' : 'Marked at the day\'s closing price.') : 'Marked at the live bid–ask midpoint. Refreshes every 5 s.' }), el('button', { class: 'btn danger sm', type: 'button', id: 'acExitAll', text: 'Exit all', onclick: exitAll })),
       el('div', { class: 'tw' }, el('table', { id: 'acPos' }))),
     el('div', { class: 'cols' },
       el('div', { class: 'panel', id: 'acPayPanel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'What your positions do at expiry' }), el('span', { class: 'sp' }), el('select', { class: 'sel', id: 'acGroup', 'aria-label': 'Position group', onchange: (e) => { group = e.target.value; renderPayoff(); } })),
@@ -73,7 +73,7 @@ function render() {
   const pts = []; for (const e of a.equityCurve) { const tt = Math.floor(e.t / 1000) + 19800; if (pts.length && pts[pts.length - 1].time >= tt) continue; pts.push({ time: tt, value: e.v }); }
   eqSeries.setData(pts); eqChart.timeScale().fitContent();
   eqSeries.applyOptions({ lineColor: a.equity >= a.startBalance ? themeColors().up : themeColors().down });
-  $('#acEqNote').textContent = S.meta.replay ? `One point per replay day (${pts.length} so far), at each day's close.` : `${pts.length} snapshots, recorded after every order and every few minutes while the app is open.`;
+  $('#acEqNote').textContent = S.meta.replay ? `One point per replay day (${pts.length} so far), at each day's close${S.meta.replay.intraday ? ' (the latest minute for the day that is running)' : ''}.` : `${pts.length} snapshots, recorded after every order and every few minutes while the app is open.`;
   // Orders
   const o = $('#acOrders');
   o.replaceChildren(el('thead', {}, el('tr', {}, ['Time', 'Instrument', 'Side', 'Lots', 'Price', 'Charges', 'Booked P&L', 'Note'].map((h, i) => el('th', { class: i < 3 || i === 7 ? 'l' : '' }, term(h))))),

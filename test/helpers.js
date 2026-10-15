@@ -41,3 +41,29 @@ export function datesIn(value, out = []) {
   else if (value && typeof value === 'object') Object.values(value).forEach((v) => datesIn(v, out));
   return out;
 }
+
+// One-minute bars for some days of the test market: NIFTY walks in a straight line from the previous close to the day's
+// close over the 375 bars (09:15 to 15:29), and option bars are Black–Scholes prices on that path. The 24,300 call only
+// starts trading at 12:00; each bar trades 10 lots.
+export const MINUTE_DAYS = ['2024-07-02', '2024-07-03', '2024-07-04'];
+export const barTs = (date, hh, mm) => Date.parse(`${date}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+05:30`) / 1000;
+export const minuteSpot = (date, i) => { const p = spotOn(DAYS[DAYS.indexOf(date) - 1]), c = spotOn(date); return Math.round((p + (c - p) * (i + 1) / 375) * 100) / 100; };
+export const minuteOption = (date, i, expiry, K, type) => {
+  const T = Math.max((Date.parse(expiry + 'T15:30:00+05:30') - (barTs(date, 9, 15) + 60 * (i + 1)) * 1000) / (365 * 864e5), 0);
+  return Math.max(0.05, Math.round(bs(type, minuteSpot(date, i), K, T, 0.06, 0.15).price * 20) / 20);
+};
+export function seedMinutes(store, days = MINUTE_DAYS) {
+  for (const date of days) {
+    const t0 = barTs(date, 9, 15);
+    store.saveIndexMinutes('NIFTY', Array.from({ length: 375 }, (_, i) => { const c = minuteSpot(date, i); return { ts: t0 + 60 * i, o: c, h: c + 5, l: c - 5, c }; }));
+    for (const expiry of EXPIRIES.filter((e) => e >= date).slice(0, 2)) {
+      for (let K = 23800; K <= 24400; K += 100) for (const type of ['CE', 'PE']) {
+        const cid = store.contractId('NIFTY', expiry, K, type, 25, `NIFTY${K}${type}`);
+        const late = K === 24300 && type === 'CE';
+        store.saveOptionMinutes(cid, Array.from({ length: 375 }, (_, i) => i).filter((i) => !late || i >= 165).map((i) => ({ ts: t0 + 60 * i, c: minuteOption(date, i, expiry, K, type), v: 250 })));
+      }
+    }
+    store.countMinutes('NIFTY', date, date);
+  }
+  return store;
+}

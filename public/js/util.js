@@ -27,8 +27,12 @@ export const daysTo = (iso) => (Date.parse(iso + 'T15:30:00+05:30') - now()) / 8
 export const fmtDay = (iso, opts = {}) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC', ...opts });
 export const fmtLeft = (iso) => { const d = daysTo(iso); return d <= 0 ? 'expired' : d < 1 ? `${Math.max(0, d * 24).toFixed(1)} h left` : `${d.toFixed(1)} days left`; };
 export const fmtTime = (ms) => new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-// Replay orders all happen "at the close", so show their day instead of a clock time.
-export const fmtWhen = (ms, replay) => (replay ? new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : fmtTime(ms));
+// Replay orders at the close show their day only; minute-by-minute ones add the time of day.
+export const fmtWhen = (ms, replay) => {
+  if (!replay) return fmtTime(ms);
+  const day = new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }), hm = new Date(ms + 19800e3).toISOString().slice(11, 16);
+  return hm === '15:30' ? day : `${day}, ${hm}`;
+};
 
 export function el(tag, attrs = {}, ...kids) {
   const e = document.createElement(tag);

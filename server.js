@@ -24,7 +24,9 @@ const MOCK = process.env.MOCK === '1' || process.argv.includes('--sim') || proce
 desktop.migrateData();
 loadDotEnv(path.join(ROOT, '.env')); // source runs only: INDSTOCKS_TOKEN for the broker feed (the exe asks in the page instead)
 let replay = null, replayError = null;
-if (MOCK) { try { replay = new ReplayEngine(desktop.DATA_DIR); } catch (e) { replayError = e.message; console.log(`  Replay unavailable: ${e.message}`); } }
+// Replay downloads minute history from INDstocks with the same token as live mode (.env or the one saved in the app).
+const history = MOCK ? new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat'))) : null;
+if (MOCK) { try { replay = new ReplayEngine(desktop.DATA_DIR, { history: () => history }); } catch (e) { replayError = e.message; console.log(`  Replay unavailable: ${e.message}`); } }
 // Live prices come from INDstocks when it has a token, else from NSE's website (IndstocksProvider falls back by itself).
 const broker = MOCK ? null : new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat')), { stream: true });
 // Stocks the owner follows (their options join the symbol list). Kept with their lot, strike step and INDstocks id.
@@ -88,12 +90,15 @@ const routes = {
   'GET /api/news': async (q) => {
     if (!MOCK) return news.latest(sym(q));
     if (needReplay().blindDays()) return { hidden: true, reason: BLIND_NEWS, items: [] };
-    return news.asOf(replay.snapshot().date, sym(q));
+    const s = replay.snapshot();
+    return news.asOf(s.date, sym(q), s.now);
   },
   'GET /api/events': async () => {
     if (!MOCK) return { events: eventsUpTo(istToday()) };
     if (needReplay().blindDays()) return { hidden: true, reason: BLIND_NEWS, events: [] };
-    return { events: eventsUpTo(replay.snapshot().date) };
+    // While a replay day is running, its surprises have not happened yet; scheduled events show by name only.
+    const s = replay.snapshot();
+    return { events: eventsUpTo(s.date).flatMap((e) => (!s.live || e.date < s.date ? [e] : e.kind === 'scheduled' ? [{ ...e, note: '' }] : [])) };
   },
   'GET /api/account': async () => needAccount().summary(),
   'POST /api/preview': async (q, b) => needAccount().preview(b.legs),
@@ -105,6 +110,8 @@ const routes = {
   'GET /api/replay/journal': async () => needReplay().account.journal(),
   'POST /api/replay/download': async (q, b) => needReplay().downloader.start(b.from, b.to, { retryHolidays: Boolean(b.retryHolidays) }),
   'POST /api/replay/download/cancel': async () => needReplay().downloader.cancel(),
+  'POST /api/replay/minutes/download': async (q, b) => needReplay().minutes.start(b.from, b.to),
+  'POST /api/replay/minutes/cancel': async () => needReplay().minutes.cancel(),
   'POST /api/replay/start': async (q, b) => needReplay().start(b),
   'POST /api/replay/step': async (q, b) => needReplay().step(b),
   'POST /api/replay/end': async () => needReplay().end(),

@@ -138,7 +138,7 @@ function render() {
   const straddle = (atm.ce?.ltp || 0) + (atm.pe?.ltp || 0);
   const stat = (k, v, s) => el('div', { class: 'stat' }, el('div', { class: 'k' }, term(k)), el('div', { class: 'v', text: v }), s ? el('div', { class: 's', text: s }) : null);
   statsBox.replaceChildren(
-    stat('Spot', inr2.format(spot), c.timestamp ? `As of ${String(c.timestamp).split(' ').pop()} IST` : S.meta.replay ? 'Index close that day' : ''),
+    stat('Spot', inr2.format(spot), c.timestamp ? `As of ${String(c.timestamp).split(' ').pop()} IST` : S.meta.replay ? (S.meta.replay.running ? `Index at ${S.meta.replay.time} that day` : 'Index close that day') : ''),
     stat('ATM strike', inr0.format(atm.strike), `Straddle ₹${inr2.format(straddle)}`),
     stat('ATM implied vol', atmIv.toFixed(1) + '%', `Expected move ±${pts(spot * atmIv / 100 * Math.sqrt(T))}`),
     stat('Put–call ratio', tot.ce ? (tot.pe / tot.ce).toFixed(2) : '—', tot.ce ? (tot.pe > tot.ce ? 'More puts open than calls' : 'More calls open than puts') : ''),

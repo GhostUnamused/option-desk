@@ -36,7 +36,7 @@ async function search(q, list) {
         ? el('div', { class: 'st-act' }, el('button', { class: 'btn ghost sm', type: 'button', text: 'Open', onclick: () => { dlg.close(); setSymbol(s.symbol); } }), el('button', { class: 'btn danger sm', type: 'button', text: 'Remove', onclick: () => change(s.symbol, false, list, q) }))
         : el('button', { class: 'btn sm', type: 'button', text: 'Follow', onclick: () => change(s.symbol, true, list, q) }));
     list.replaceChildren(
-      ...(r.watchlist.length && !q ? [el('div', { class: 'st-h', text: `Following (${r.watchlist.length})` }), ...r.stocks.filter((s) => s.watched).map(row), el('div', { class: 'st-h', text: 'All stocks with options' })] : []),
+      ...(r.watchlist.length && !q ? [el('div', { class: 'st-h', text: `Following (${r.watchlist.length})` }), ...r.watchlist.map((s) => row({ ...s, watched: true })), el('div', { class: 'st-h', text: 'All stocks with options' })] : []),
       ...r.stocks.filter((s) => q || !s.watched).map(row),
       r.stocks.length ? '' : el('p', { class: 'note', text: `No stock with options matches "${q}".` }),
       !q && r.total > r.stocks.length ? el('p', { class: 'note', text: `Showing ${r.stocks.length} of ${r.total}. Type to search the rest.` }) : '');

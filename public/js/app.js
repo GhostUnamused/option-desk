@@ -18,7 +18,7 @@ const TABS = { learn, markets, chain, strategy, positions };
 // Replay mode before any session: only the lessons and the Replay tab have anything to show.
 const replayIdle = () => Boolean(S.meta?.replay && !S.meta.replay.date); // ended sessions stay viewable; the server refuses their orders
 const NEEDS_MARKET = ['markets', 'chain', 'strategy', 'positions'];
-let lastQuote = {}, offline = null, quotesAt = 0;
+let lastQuote = {}, offline = null, quotesAt = 0, tickerSymbol = null;
 
 // One plain sentence at the top of each tab saying what it is for.
 const INTROS = {
@@ -68,6 +68,13 @@ function renderTickers() {
       return b;
     }));
   }
+  const selectedChanged = tickerSymbol !== S.symbol;
+  tickerSymbol = S.symbol;
+  // Keep the latest selection first so it stays visible at the front of the scrollable strip.
+  for (const i of [...items].sort((a, b) => Number(b.symbol === S.symbol) - Number(a.symbol === S.symbol))) {
+    const card = box.querySelector(`[data-sym="${i.symbol}"]`); if (card) box.append(card);
+  }
+  if (selectedChanged) box.scrollLeft = 0;
   renderVix(q.vix);
   for (const i of items) {
     const b = box.querySelector(`[data-sym="${i.symbol}"]`); if (!b) continue;
@@ -102,7 +109,7 @@ function sessionView() {
   const r = S.meta.replay;
   if (r) {
     if (!r.date) return { key: 'replay-idle', led: 'warn', label: 'Historical replay', main: 'Not started', sub: '', title: 'Start a session in the Replay tab.' };
-    return { key: 'replay', led: 'warn', label: r.blind ? 'Blind replay' : 'Historical replay', main: r.blind ? `Day ${r.day}` : fmtDay(r.date, { weekday: undefined }), sub: 'close', title: 'Prices are this day\'s closing prices (15:30 IST).' };
+    return { key: 'replay', led: 'warn', label: r.blind ? 'Blind replay' : 'Historical replay', main: r.blind ? `Day ${r.day}` : fmtDay(r.date, { weekday: undefined }), sub: r.running ? r.time : 'close', title: r.running ? `Prices are the last trades before ${r.time} IST on this day.` : 'Prices are this day\'s closing prices (15:30 IST).' };
   }
   const t = istParts(Date.now()); const clock = `${pad2(t.h)}:${pad2(t.m)}:${pad2(t.s)}`;
   const updated = quotesAt ? `Prices last updated ${new Date(quotesAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false })} IST.` : '';
