@@ -52,3 +52,14 @@ async function change(symbol, add, list, q) {
     else { if (S.symbol === symbol) setSymbol('NIFTY'); search(q, list); toast(`${symbol} removed.`); }
   } catch (e) { toast(e.message, 'err'); }
 }
+
+// Keep ticker management available beside the stock wherever the market table lists it.
+export async function removeTicker(symbol) {
+  try {
+    const r = await api('/api/watchlist', { symbol, add: false });
+    S.meta.indices = r.indices;
+    if (S.symbol === symbol) setSymbol('NIFTY');
+    emit('universe');
+    toast(`${symbol} removed.`);
+  } catch (e) { toast(e.message, 'err'); }
+}

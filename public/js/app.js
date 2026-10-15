@@ -22,7 +22,7 @@ let lastQuote = {}, offline = null, quotesAt = 0, tickerSymbol = null;
 
 // One plain sentence at the top of each tab saying what it is for.
 const INTROS = {
-  learn: ['Get a feel for how option prices move.', ' Six short lessons, each with an experiment on the sliders below. No real money, no market needed: drag things and watch what happens.'],
+  learn: ['Learn options from the contract up.', ' Start with calls, puts, expiry payoffs and break-even, then see how premium and the Greeks change your result in the interactive playground.'],
   markets: ['How is the market doing?', ' Check the index chart and the plain-English market read before you think about any trade.'],
   chain: ['Every option on one screen.', ' Calls (bets on a rise) are on the left, puts (bets on a fall) on the right, and the strike price runs down the middle.'],
   strategy: ['Plan a trade before you place it.', ' Pick a ready-made strategy for your view of the market and see the most you could make or lose.'],
@@ -43,7 +43,7 @@ function guide() {
       el('span', { class: 'sp' }),
       el('button', { class: 'btn ghost sm', type: 'button', text: 'Hide guide', onclick: () => { g.hidden = true; store.set('guideHidden', true); } })),
     el('ol', { class: 'steps' },
-      step('Learn how prices move', ['Six short lessons with sliders: what you pay for, then delta, theta, vega and gamma, each tried out before it is named.'], go('learn', 'Open lessons')),
+      step('Learn how options work', ['Start with calls, puts, expiry payoffs and break-even, then experiment with premium, delta, theta, vega and gamma.'], go('learn', 'Open lessons')),
       step('Read the market', ['See whether the index is rising or falling and how nervous traders are. The ', el('b', { text: 'Market read' }), ' panel below sums it up in plain words.'], null),
       step('Look at option prices', ['The option chain lists every ', term('strike'), '. Hover a price and press ', el('b', { text: 'B' }), ' to buy or ', el('b', { text: 'S' }), ' to sell.'], go('chain', 'Open option chain')),
       step('Try a ready-made strategy', ['Choose bullish, bearish or range-bound and see the ', term('max profit'), ' and ', term('max loss'), ' before you trade.'], go('strategy', 'Open strategy builder')),

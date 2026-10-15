@@ -4,7 +4,7 @@ import { term } from './glossary.js';
 import { S, on, cfg, quote, loadChain, analysisExpiry, loadExpiries } from './state.js';
 import { yearsTo, now } from './bs.js';
 import { StudyChart, indicatorMenu, loadPrefs, savePrefs } from './studies.js';
-import { open as openStocks, available as stocksAvailable } from './stocks.js';
+import { open as openStocks, available as stocksAvailable, removeTicker } from './stocks.js';
 import { alignTo, STUDIES } from './indicators.js';
 import * as news from './newsfeed.js';
 
@@ -30,12 +30,13 @@ export function init(sec) {
   tableBox = el('div', { class: 'tw' });
   root.append(
     el('div', { class: 'cols' },
-      el('div', { class: 'panel chart-panel' }, head, box, legend),
+      el('div', { class: 'main-col' },
+        el('div', { class: 'panel chart-panel' }, head, box, legend),
+        el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Indices and stocks' }), el('span', { class: 'note', text: 'Click a row to switch the whole app to it.' }), el('span', { class: 'sp' }),
+          stocksAvailable() ? el('button', { class: 'btn ghost sm', type: 'button', text: '＋ Stock options', title: 'Follow a stock to trade its options', onclick: openStocks }) : null), tableBox)),
       el('div', { class: 'side-col' },
         el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Market read' }), el('span', { class: 'sp' }), el('span', { class: 'note', id: 'readExp' })), readBox),
         news.panel())),
-    el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Indices and stocks' }), el('span', { class: 'note', text: 'Click a row to switch the whole app to it.' }), el('span', { class: 'sp' }),
-      stocksAvailable() ? el('button', { class: 'btn ghost sm', type: 'button', text: '＋ Stock options', title: 'Follow a stock to trade its options', onclick: openStocks }) : null), tableBox),
   );
   on('quotes', () => { if (S.tab === 'markets') { renderHead(); renderTable(); if (range === '1D') liveTick(); } });
   on('symbol', () => { if (S.tab === 'markets') { draw(true); renderHead(); news.refresh(); } });
@@ -170,7 +171,8 @@ function renderTable() {
   const t = el('table', {},
     el('thead', {}, el('tr', {}, ['Name', 'Last', 'Change', '%', 'Open', 'High', 'Low', 'Prev close', '52-week range', 'Lot'].map((h, i) => el('th', { class: i === 0 || i === 8 ? 'l' : '' }, term(h))))),
     el('tbody', {}, rows.map((i) => el('tr', { style: { cursor: i.symbol === 'INDIAVIX' ? 'default' : 'pointer' }, onclick: () => i.symbol !== 'INDIAVIX' && import('./state.js').then((m) => m.setSymbol(i.symbol)) },
-      el('td', { class: 'l t', text: i.name + (i.symbol === S.symbol ? '  •' : '') }), el('td', { text: inr2.format(i.last) }),
+      el('td', { class: 'l t' }, el('div', { class: 'market-name' }, el('span', { text: i.name + (i.symbol === S.symbol ? '  •' : '') }),
+        i.kind === 'stock' ? el('button', { class: 'ticker-remove', type: 'button', title: `Remove ${i.short || i.symbol} from your tickers`, 'aria-label': `Remove ${i.short || i.symbol} from your tickers`, text: '×', onclick: (e) => { e.stopPropagation(); removeTicker(i.symbol); } }) : null)), el('td', { text: inr2.format(i.last) }),
       el('td', { class: tone(i.change), text: (i.change >= 0 ? '+' : '−') + inr2.format(Math.abs(i.change)) }), el('td', { class: tone(i.pct), text: pct(i.pct) }),
       el('td', { text: i.open ? inr2.format(i.open) : '—' }), el('td', { text: i.high ? inr2.format(i.high) : '—' }), el('td', { text: i.low ? inr2.format(i.low) : '—' }), el('td', { text: inr2.format(i.prevClose) }),
       el('td', { class: 'l' }, i.yearLow ? rangeBar(i.yearLow, i.yearHigh, i.last) : '—'), el('td', { text: i.lot || '—' })))));

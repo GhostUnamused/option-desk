@@ -6,7 +6,8 @@ import { bs } from './bs.js';
 import { term } from './glossary.js';
 
 const p = { type: 'CE', side: 'BUY', spot: 0, strike: 0, days: 14, iv: 14 };
-let root, base = 0, baseIv = 14, lesson = store.get('learnLesson', 0), done = new Set(store.get('learnDone', [])), chartMode = 'spot', answered = null;
+const oldLesson = store.get('learnLesson', null), oldDone = store.get('learnDone', []);
+let root, base = 0, baseIv = 14, lesson = store.get('learnLessonV2', oldLesson == null ? 0 : oldLesson + 2), done = new Set(store.get('learnDoneV2', oldDone.map((i) => i + 2))), chartMode = 'spot', answered = null, entryPrice = 0;
 const ctl = {};
 
 const b = (t) => el('b', { text: t });
@@ -25,19 +26,46 @@ const atm = (o = {}) => ({ type: 'CE', side: 'BUY', strike: near(base), spot: ne
 
 const LESSONS = [
   {
-    nav: 'What you pay for', title: 'What am I actually paying for?', hook: ['Premium', 'already earned + hope'],
+    nav: 'Option contracts', title: 'An option is a right with a deadline', hook: ['Option', 'right for buyer · obligation for seller'],
     body: [
-      ['The price of an option is called its ', b('premium'), '. It has two parts.'],
-      [b('Intrinsic value'), ' is what the option would be worth if it ended right now. A 23,000 call when the index is at 23,100 is already 100 points ahead, so ₹100 per unit is "already earned".'],
-      [b('Time value'), ' is everything above that: what people pay for the hope that it gets better before expiry. Time value always shrinks to zero by expiry.'],
+      ['An option is a contract tied to an underlying, such as NIFTY. It names a ', b('strike'), ' (the agreed level) and an ', b('expiry'), ' (the deadline).'],
+      ['A call gives its buyer the right to buy at the strike; a put gives the right to sell at the strike. You do not have to use that right. If it is not useful by expiry, it can expire worthless.'],
+      ['The buyer pays a ', b('premium'), ' up front for that right. The seller collects it, but must take the other side if the buyer exercises. Buying has a capped loss: the premium. Selling can have much larger losses, so brokers require margin.'],
+      ['Exchange options trade in lots: one lot contains many units of the underlying. The playground shows both per-unit and per-lot amounts.'],
+      ['Index options in this practice app settle in cash. Real stock options can require delivery of shares at expiry; this simulator settles stock options in cash to keep practice simple.'],
     ],
-    tryIt: 'Drag Index level above and below the strike. Under the price, the solid bar is intrinsic value and the striped bar is time value. Notice that an option with no intrinsic value still costs something: that is pure hope.',
+    tryIt: 'Switch between Buy and Sell in the playground. The contract is the same, but you pay or receive the premium and the risk changes sides. Change the strike to see which level the right is tied to.',
+    focus: 'side', chart: 'spot', setup: () => atm(),
+    obs: (g) => `This ${kind()} is a right for its buyer and an obligation for its seller. The ${p.side === 'BUY' ? 'buyer pays' : 'seller receives'} ${u(g.price)} per unit now (${perLot(g.price)} for one ${idx()} lot).`,
+    quiz: { q: 'You buy a call. What does the contract give you?', opts: ['The right to buy at the strike', 'The duty to buy at the strike', 'A guaranteed profit'], a: 0, why: 'The buyer chooses whether to use the right. Paying the premium does not guarantee a profit.' },
+  },
+  {
+    nav: 'Call, put & payoff', title: 'Call or put: what happens at expiry?', hook: ['Call', 'benefits from rises · Put benefits from falls'],
+    body: [
+      ['At expiry, a call is worth the amount the index finishes ', b('above'), ' its strike. A put is worth the amount it finishes ', b('below'), ' its strike. Otherwise, the option expires with no payoff.'],
+      ['Call payoff = max(index − strike, 0). Put payoff = max(strike − index, 0). This is the amount delivered by the option at expiry, before subtracting what you paid for it.'],
+      ['To find your result as a buyer, subtract the premium from that payoff. A call buyer breaks even above strike + premium; a put buyer breaks even below strike − premium. Fees and taxes can shift the real break-even slightly.'],
+      ['A view can be directionally right and still lose: if the move is too small, too late, or the premium was too expensive, the payoff may not cover the cost.'],
+    ],
+    tryIt: 'Use the Call and Put buttons, then move Index level across the strike. Watch “Net at expiry” update. Compare that result with the option premium you would pay today.',
+    focus: 'type', chart: 'spot', setup: () => atm(),
+    obs: () => `At an expiry finish of ${inr0.format(p.spot)}, this ${kind()} pays ${u(intrinsic())}. After the ${u(entryPrice)} entry premium, the ${p.side === 'BUY' ? 'buyer' : 'seller'} would ${gainLose((intrinsic() - entryPrice) * sign())} about ${perLot((intrinsic() - entryPrice) * sign())} per lot, before costs.`,
+    quiz: { q: 'You buy a 23,000 call for ₹100. At expiry the index is 23,060. What is your result per unit before costs?', opts: ['₹60 profit', '₹40 loss', '₹100 profit'], a: 1, why: 'The call pays ₹60 at expiry, but you paid ₹100. Net result = ₹60 − ₹100 = ₹40 loss. A call buyer breaks even at 23,100.' },
+  },
+  {
+    nav: 'Premium & time value', title: 'What am I actually paying for?', hook: ['Premium', 'intrinsic value + time value'],
+    body: [
+      ['The price of an option is called its ', b('premium'), '. It has two parts. Premium is the price of the contract, not your profit.'],
+      [b('Intrinsic value'), ' is what the option would pay if it expired right now. A 23,000 call with the index at 23,100 has ₹100 of intrinsic value per unit. That is not necessarily profit: you may have paid more than ₹100 for it.'],
+      [b('Time value'), ' is everything above intrinsic value: what people pay for the chance the contract becomes more valuable before expiry. It can rise or fall while the option is alive, but is zero at expiry.'],
+    ],
+    tryIt: 'Drag Index level above and below the strike. Under the price, the solid bar is intrinsic value and the striped bar is time value. An option with no intrinsic value can still cost something because it has time left to become valuable.',
     focus: 'spot', chart: 'spot', setup: () => atm({ spot: near(base) + 2 * step() }),
     obs: (g) => {
       const iv = intrinsic(), tv = Math.max(g.price - iv, 0);
       return iv > 0
-        ? `Of the ${u(g.price)} price, ${u(iv)} is intrinsic (already earned) and ${u(tv)} is time value (hope). At expiry only the intrinsic part can remain.`
-        : `This ${kind()} is not in the money, so all ${u(g.price)} of its price is time value: you are paying purely for the chance the index moves past ${inr0.format(p.strike)}.`;
+        ? `Of the ${u(g.price)} price, ${u(iv)} is intrinsic value and ${u(tv)} is time value. Intrinsic value is not profit until you compare it with the entry premium. At expiry only intrinsic value can remain.`
+        : `This ${kind()} is not in the money, so all ${u(g.price)} of its price is time value: you are paying for the chance the index moves past ${inr0.format(p.strike)} before expiry.`;
     },
     quiz: { q: 'A 23,000 call costs ₹160 while the index is at 23,100. How much of the ₹160 is time value?', opts: ['₹160', '₹100', '₹60'], a: 2, why: 'Intrinsic value is 23,100 − 23,000 = ₹100. The other ₹60 is time value, and it melts to zero by expiry.' },
   },
@@ -47,13 +75,13 @@ const LESSONS = [
       ['Delta tells you how many rupees the option moves when the index moves ', b('1 point'), '. A delta of 0.50 means the index +100 points → the option about +₹50 per unit.'],
       ['Calls have positive delta (they like rises). Puts have negative delta (they like falls).'],
       ['Delta runs from 0 to 1 (or 0 to −1 for puts). Deep in-the-money options follow the index almost fully (near 1). Far out-of-the-money options barely react (near 0). At the money is about 0.5.'],
-      ['Many traders also read delta as a rough chance of ending in the money: 0.30 ≈ 30%.'],
+      ['Some traders use absolute delta as a rough chance of ending in the money, so 0.30 might suggest roughly 30%. It is not an exact probability or a guarantee; it depends on market assumptions.'],
     ],
     tryIt: 'Note the price, then drag Index level up by about 100 points: the price rises by roughly delta × 100. Then move Strike far away from the index and watch delta shrink toward 0.',
     focus: 'spot', chart: 'spot', setup: () => atm(),
     obs: (g) => {
       const up = val({ spot: p.spot + 100 }).price;
-      return `Delta is ${g.delta.toFixed(2)}. If ${idx()} rises 100 points, this ${kind()} goes from ${u(g.price)} to ${u(up)} per unit (${up >= g.price ? '+' : '−'}${u(up - g.price)}). Delta alone predicted about ${g.delta >= 0 ? '+' : '−'}${u(g.delta * 100)}; the small gap is gamma, lesson 5.`;
+      return `Delta is ${g.delta.toFixed(2)}. If ${idx()} rises 100 points, this ${kind()} goes from ${u(g.price)} to ${u(up)} per unit (${up >= g.price ? '+' : '−'}${u(up - g.price)}). Delta alone predicted about ${g.delta >= 0 ? '+' : '−'}${u(g.delta * 100)}; the small gap is gamma, lesson 7.`;
     },
     quiz: { q: 'An option has delta 0.30. The index rises 50 points. Roughly how much does the option\'s price change?', opts: ['+₹15', '+₹30', '+₹50'], a: 0, why: '0.30 × 50 = 15. This option follows about 30% of the index\'s move.' },
   },
@@ -107,7 +135,7 @@ const LESSONS = [
     nav: 'Buying vs selling', title: 'Long vs short: same option, opposite feelings', hook: ['Short', 'every Greek flips'],
     body: [
       ['When you ', b('sell'), ' (go short) an option, you receive the premium upfront and every effect reverses:'],
-      ['• Time passing now ', b('pays you'), ' (theta works for you).'],
+      ['• If the index and IV stay still, time passing now ', b('pays you'), ' (theta works for you).'],
       ['• A big move now ', b('hurts you'), ', and gamma makes it hurt faster.'],
       ['• A jump in IV now ', b('hurts you'), ' (vega works against you).'],
       ['Buyers can lose at most what they paid. Sellers earn at most the premium but can lose much more. That is why brokers block margin from sellers.'],
@@ -145,9 +173,10 @@ function resetBase() {
 }
 
 function openLesson(i) {
-  lesson = Math.max(0, Math.min(LESSONS.length - 1, i)); store.set('learnLesson', lesson);
+  lesson = Math.max(0, Math.min(LESSONS.length - 1, i)); store.set('learnLessonV2', lesson);
   const L = LESSONS[lesson];
   Object.assign(p, L.setup()); chartMode = L.chart; answered = null;
+  entryPrice = val().price;
   renderNav(); renderLesson(); syncControls(); update();
 }
 
@@ -178,7 +207,7 @@ function renderLesson() {
 
 function answer(i) {
   answered = i;
-  if (i === LESSONS[lesson].quiz.a) { done.add(lesson); store.set('learnDone', [...done]); }
+  if (i === LESSONS[lesson].quiz.a) { done.add(lesson); store.set('learnDoneV2', [...done]); }
   renderNav(); renderLesson(); update();
 }
 
@@ -186,13 +215,13 @@ function answer(i) {
 
 function slider(key, label, help) {
   const out = el('output', { class: 'sv' });
-  const input = el('input', { type: 'range', 'aria-label': label, oninput: (e) => { p[key] = +e.target.value; update(); } });
+  const input = el('input', { type: 'range', 'aria-label': label, oninput: (e) => { p[key] = +e.target.value; if (key === 'strike') entryPrice = val().price; update(); } });
   ctl[key] = { input, out, wrap: el('label', { class: 'sl' }, el('span', { class: 'slh' }, el('span', { text: label }), out), input, el('span', { class: 'note', text: help })) };
   return ctl[key].wrap;
 }
 
 function seg(key, opts) {
-  const box = el('div', { class: 'seg', role: 'group' }, opts.map(([v, t]) => el('button', { type: 'button', 'data-v': v, text: t, onclick: () => { p[key] = v; syncControls(); update(); } })));
+  const box = el('div', { class: 'seg', role: 'group' }, opts.map(([v, t]) => el('button', { type: 'button', 'data-v': v, text: t, onclick: () => { p[key] = v; if (key === 'type') entryPrice = val().price; syncControls(); update(); } })));
   ctl[key] = { box };
   return box;
 }
@@ -240,7 +269,8 @@ function update() {
     el('div', { class: 'note', text: `${rs(g.price * n)} per lot · you ${p.side === 'BUY' ? 'pay' : 'receive'} this` }),
     el('div', { class: 'vbar', role: 'img', 'aria-label': `Intrinsic ${u(iv)}, time value ${u(tv)}` },
       el('span', { class: 'iv', style: { width: `${g.price > 0 ? (iv / g.price) * 100 : 0}%` } }), el('span', { class: 'tv', style: { width: `${g.price > 0 ? (tv / g.price) * 100 : 0}%` } })),
-    el('div', { class: 'vlab' }, el('span', {}, el('i', { class: 'sw ivs' }), `Intrinsic ${u(iv)}`), el('span', {}, el('i', { class: 'sw tvs' }), `Time value ${u(tv)}`)));
+    el('div', { class: 'vlab' }, el('span', {}, el('i', { class: 'sw ivs' }), `Intrinsic ${u(iv)}`), el('span', {}, el('i', { class: 'sw tvs' }), `Time value ${u(tv)}`)),
+    el('div', { class: 'expiry-result' }, el('b', { text: `Net at expiry if index ends at ${inr0.format(p.spot)}` }), el('span', { class: gainLose((intrinsic() - entryPrice) * s), text: `${(intrinsic() - entryPrice) * s >= 0 ? '+' : '−'}${perLot((intrinsic() - entryPrice) * s)} per lot` }), el('small', { class: 'note', text: `Payoff minus entry premium (${u(entryPrice)} per unit); before fees and taxes.` })));
   const card = (key, name, hook, value, line) => el('div', { class: 'stat gcard' + (L.greek === key ? ' hl' : '') }, el('div', { class: 'k' }, term(name, key), el('span', { class: 'hk', text: hook })), el('div', { class: 'v', text: value }), el('div', { class: 's', text: line }));
   const dl = g.delta * s, th = g.theta * s, vg = g.vega * s;
   $('#lnGreeks').replaceChildren(
