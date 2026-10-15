@@ -88,7 +88,7 @@ const routes = {
     return liveHist.history(sym(q), days, Boolean((await provider.marketStatus().catch(() => null))?.open));
   },
   'GET /api/news': async (q) => {
-    if (!MOCK) return news.latest(sym(q));
+    if (!MOCK) return news.latest(sym(q), q.get('refresh') === '1');
     if (needReplay().blindDays()) return { hidden: true, reason: BLIND_NEWS, items: [] };
     const s = replay.snapshot();
     return news.asOf(s.date, sym(q), s.now);

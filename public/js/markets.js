@@ -215,7 +215,7 @@ async function renderRead() {
     if (vixNow != null) sum.push(`India VIX at ${vixNow.toFixed(2)} says the market mood is ${mood}${vixPct != null ? ` (higher than ${vixPct}% of the past year)` : ''}.`);
     if (iv && move) sum.push(`Options price a move of about ±${pts(move)} points by ${fmtExpiry(exp)}.`);
     if (rich != null) sum.push(rich > 1.5 ? 'Options look expensive against recent movement, which favours sellers.' : rich < -1.5 ? 'Options look cheap against recent movement, which favours buyers.' : 'Options are priced roughly in line with recent movement.');
-    if (nw && !nw.hidden && nw.items.length) sum.push(`News mood is ${nw.mood.label.toLowerCase()}${nw.mood.shocks ? `, with ${nw.mood.shocks} shock headline${nw.mood.shocks > 1 ? 's' : ''} that could jolt prices` : ''}.`);
+    if (nw && !nw.hidden && nw.items.length) sum.push(`Headline tone is ${nw.mood.label.toLowerCase()} with ${nw.mood.confidence.toLowerCase()} confidence from ${nw.mood.total} headlines across ${nw.mood.sources} sources${nw.mood.shocks ? `, including ${nw.mood.shocks} major market risk${nw.mood.shocks > 1 ? 's' : ''}` : ''}.`);
     sum.push(`Writers have built a range from about ${pts(Math.min(putWall, callWall))} to ${pts(Math.max(putWall, callWall))}.`);
     readBox.replaceChildren(
       el('p', { class: 'summary', text: sum.join(' ') }),
@@ -229,7 +229,7 @@ async function renderRead() {
         row('Put–call ratio', pcr ? pcr.toFixed(2) : '—', pcr ? (pcr > 1 ? 'More puts open: writers lean supportive' : 'More calls open: writers lean cautious') : ''),
         row('Call wall / put wall', `${pts(callWall)} / ${pts(putWall)}`, 'Strikes with the most open calls and puts'),
         row('Max pain', pts(mp), 'Close where most options would expire worthless'),
-        nw && !nw.hidden ? row('News mood', nw.mood.label, `${nw.mood.positive} positive · ${nw.mood.negative} negative headlines${nw.mood.shocks ? ` · ${nw.mood.shocks} shocks` : ''}`, nw.mood.score > 0.08 ? 'up' : nw.mood.score < -0.08 ? 'down' : '') : null,
+        nw && !nw.hidden ? row('Headline tone', nw.mood.label, `${nw.mood.confidence} confidence · ${nw.mood.total} headlines · ${nw.mood.sources} sources`, nw.mood.score > 0.08 ? 'up' : nw.mood.score < -0.08 ? 'down' : '') : null,
       ),
     );
   } catch (e) { readBox.replaceChildren(el('p', { class: 'errbox', text: `Market read unavailable: ${e.message}` })); }
