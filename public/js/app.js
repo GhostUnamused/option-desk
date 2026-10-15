@@ -10,6 +10,7 @@ import * as positions from './positions.js';
 import * as ticket from './ticket.js';
 import * as replay from './replay.js';
 import { closeDrawer } from './drawer.js';
+import * as broker from './broker.js';
 
 const TABS = { learn, markets, chain, strategy, positions };
 // Replay mode before any session: only the lessons and the Replay tab have anything to show.
@@ -216,7 +217,7 @@ async function pollQuotes() {
   try {
     S.quotes = await api('/api/indices');
     offline = null; quotesAt = Date.now();
-    renderTickers(); emit('quotes', S.quotes);
+    renderTickers(); emit('quotes', S.quotes); broker.update(S.quotes.broker);
   } catch (e) { offline = e.message; }
   renderSession();
 }
@@ -258,6 +259,7 @@ async function boot() {
   initGlossary();
   initTickerStrip();
   initDesktop();
+  broker.init();
   for (const [k, mod] of Object.entries(TABS)) { const sec = $('#tab-' + k); if (INTROS[k]) sec.append(intro(k)); mod.init?.(sec); }
   $('#tab-markets').prepend(guide());
   $('#guideBtn').addEventListener('click', () => { $('#guide').hidden = false; store.set('guideHidden', false); showTab('markets'); scrollTo({ top: 0, behavior: 'smooth' }); });

@@ -207,9 +207,9 @@ tbody tr:hover td { background: var(--panel-2); }
 .heat td { text-align: center; }
 
 /* Ticket dialog */
-dialog#ticket { border: 1px solid #2A2A2A; border-radius: 16px; padding: 0; width: min(460px, calc(100vw - 24px)); background: linear-gradient(180deg, #141414, #0E0E0E); color: var(--fg); box-shadow: var(--hi), 0 24px 64px rgba(0, 0, 0, .8); }
-dialog#ticket[open] { animation: rise .22s var(--ease); }
-dialog#ticket::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); }
+dialog#ticket, dialog.sheet { border: 1px solid #2A2A2A; border-radius: 16px; padding: 0; width: min(460px, calc(100vw - 24px)); background: linear-gradient(180deg, #141414, #0E0E0E); color: var(--fg); box-shadow: var(--hi), 0 24px 64px rgba(0, 0, 0, .8); }
+dialog#ticket[open], dialog.sheet[open] { animation: rise .22s var(--ease); }
+dialog#ticket::backdrop, dialog.sheet::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px) scale(.985); } }
 .tk-h { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
 .tk-h h3 { font-size: 1.1rem; }
@@ -236,6 +236,14 @@ dialog#ticket::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: blur(
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: .9rem; }
 .kv .k { color: var(--muted); } .kv .v { font-family: var(--mono); text-align: right; }
 .warnbox { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 9px 12px; font-size: .88rem; }
+.okbox { background: var(--up-soft); color: var(--up); border-radius: 8px; padding: 9px 12px; font-size: .88rem; }
+dialog#broker { width: min(520px, calc(100vw - 24px)); }
+dialog#broker p { line-height: 1.5; }
+.bk-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; line-height: 1.5; }
+.bk-steps a { color: var(--accent-text); }
+.inp.tok { width: 100%; padding: 9px 11px; }
+button.pill { border: 0; cursor: pointer; font-family: inherit; }
+button.pill:hover { color: var(--accent-text); }
 .errbox { background: var(--down-soft); color: var(--down); border-radius: 8px; padding: 9px 12px; font-size: .88rem; }
 .tk-f { padding: 12px 16px 16px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--well); box-shadow: var(--sunk); }

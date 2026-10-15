@@ -35,7 +35,7 @@
   <button role="tab" data-tab="replay" hidden>Replay</button>
   <span class="tab-ink" id="tabInk" aria-hidden="true"></span>
   <span class="tabs-sym" id="symLabel"></span>
-  <span class="pill" id="srcPill" hidden>Connecting</span>
+  <button class="pill" id="srcPill" type="button" hidden>Connecting</button>
   <button class="btn ghost sm" id="modeBtn" type="button" hidden></button>
   <button class="pill" id="updPill" type="button" hidden></button>
   <button class="btn ghost sm help" id="guideBtn" type="button" title="Show the beginner guide on the Markets tab">Beginner guide</button>
@@ -52,9 +52,10 @@
 </main>
 
 <dialog id="ticket" aria-label="Order ticket"></dialog>
+<dialog id="broker" class="sheet" aria-label="Connect INDstocks"></dialog>
 <aside id="drawer" class="drawer" hidden aria-label="Option detail"></aside>
 <div id="toasts" class="toasts" aria-live="polite"></div>
-<footer class="foot">Paper trading only. Prices come from NSE's public website, which can lag, rate-limit or change without notice. Charges and margins are estimates. Nothing here is investment advice. <span id="appVer"></span>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>.</footer>
+<footer class="foot">Paper trading only. Prices come from your INDstocks account when connected, otherwise from NSE's public website, which can lag, rate-limit or change without notice. Charges and margins are estimates. Nothing here is investment advice. <span id="appVer"></span>Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>.</footer>
 <script type="module" src="/js/app.js"></script>
 </body>
 </html>
