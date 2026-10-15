@@ -374,6 +374,14 @@ td.wrap { white-space: normal; min-width: 180px; }
 .tabs button[role=tab].off { opacity: .45; }
 .rp-form { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
 .rp-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.rp-download-heading { margin-bottom: 14px; }
+.rp-download-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+.rp-download-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; margin-top: 14px; }
+.rp-download-field { display: grid; gap: 6px; }
+.rp-download-label { color: var(--muted); font-size: .9em; }
+.rp-range { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+.rp-symbol-choice { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+@media (max-width: 640px) { .rp-download-controls { align-items: stretch; } .rp-download-controls > .btn { width: 100%; } }
 label.check { display: flex; gap: 8px; align-items: flex-start; max-width: 420px; font-size: .88rem; color: var(--muted); cursor: pointer; line-height: 1.4; }
 label.check input { margin-top: 3px; accent-color: var(--accent); }
 label.check b { color: var(--fg); font-weight: 600; }

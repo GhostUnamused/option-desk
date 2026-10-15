@@ -119,7 +119,7 @@ async function renderTab() {
     if (status.ended) parts.push(await journalPanel(true));
     parts.push(startPanel());
   }
-  parts.push(dataPanel(), minutePanel(), el('div', { class: 'cols' }, howPanel(), settingsPanel()));
+  parts.push(dataPanel(), el('div', { class: 'cols' }, howPanel(), settingsPanel()));
   root.replaceChildren(intro(), ...parts.filter(Boolean));
   if (status.download?.running || status.minutes?.download?.running) watchDownload();
 }
@@ -268,13 +268,29 @@ function startPanel() {
 function dataPanel() {
   const c = status.coverage;
   if (!c) return el('div', { class: 'panel' }, el('h2', { text: 'Historical data' }), el('p', { class: 'note', style: { marginTop: '6px' }, text: 'Hidden during a blind session, because the list of downloaded days would give the dates away.' }));
-  const today = isoToday();
+  const m = status.minutes, mc = m?.coverage || {}, today = isoToday();
+  const selected = new Set(store.get('replayDownloadSymbols', status.symbols || ['NIFTY', 'BANKNIFTY']));
   const to = el('input', { class: 'inp', type: 'date', id: 'rpTo', value: today, max: today, min: status.earliest, style: { width: '11em' } });
-  const from = el('input', { class: 'inp', type: 'date', id: 'rpFrom', value: back(today, 6), max: today, min: status.earliest, style: { width: '11em' } });
-  const preset = (label, months) => el('button', { class: 'btn ghost sm', type: 'button', text: label, onclick: () => { to.value = today; from.value = back(today, months); } });
-  const dl = el('button', { class: 'btn', type: 'button', id: 'rpDl', text: 'Download', onclick: async () => {
-    try { status.download = await api('/api/replay/download', { from: from.value, to: to.value }); watchDownload(); }
-    catch (e) { toast(e.message, 'err'); }
+  const from = el('input', { class: 'inp', type: 'date', id: 'rpFrom', value: m?.indexFrom || back(today, 6), max: today, min: status.earliest, style: { width: '11em' } });
+  const preset = (label, months) => el('button', { class: 'btn ghost sm', type: 'button', text: label, onclick: () => { to.value = today; from.value = months ? back(today, months) : m?.indexFrom || status.earliest; } });
+  const choices = (status.symbols || ['NIFTY', 'BANKNIFTY']).map((symbol) => {
+    const box = el('input', { type: 'checkbox', checked: selected.has(symbol), value: symbol, onchange: () => {
+      const next = [...$('#rpSymbols').querySelectorAll('input:checked')].map((x) => x.value);
+      if (!next.length) { box.checked = true; toast('Choose at least one index.', 'err'); return; }
+      store.set('replayDownloadSymbols', next);
+    } });
+    return el('label', { class: 'check rp-symbol-choice' }, box, el('span', {}, el('b', { text: S.meta.indices[symbol]?.short || symbol })));
+  });
+  const dl = el('button', { class: 'btn', type: 'button', id: 'rpDl', text: m?.source.connected ? 'Download daily + minute history' : 'Download daily history', disabled: Boolean(status.download?.running || m?.download?.running), onclick: async () => {
+    const symbols = [...$('#rpSymbols').querySelectorAll('input:checked')].map((x) => x.value);
+    if (!symbols.length) { toast('Choose at least one index.', 'err'); return; }
+    try {
+      status.download = await api('/api/replay/download', { from: from.value, to: to.value, symbols });
+      if (m?.source.connected) {
+        status.minutes.download = await api('/api/replay/minutes/download', { from: from.value, to: to.value, symbols });
+      } else toast('Daily history started. Connect INDstocks to include minute prices.', 'err');
+      watchDownload();
+    } catch (e) { toast(e.message, 'err'); watchDownload(); }
   } });
   const cov = c.first
     ? el('div', { class: 'grid' },
@@ -284,46 +300,25 @@ function dataPanel() {
     : el('p', { class: 'note', text: 'Nothing downloaded yet.' });
   const gaps = c.ranges.length > 1 ? el('p', { class: 'note', style: { marginTop: '8px' }, text: `Downloaded in ${c.ranges.length} separate stretches: ${c.ranges.map((r) => `${fmtDay(r.from)} – ${fmtDay(r.to)}`).join('; ')}. Replay jumps over the gaps.` }) : null;
   const errs = c.errorDays ? el('p', { class: 'warnbox', style: { marginTop: '8px' }, text: `${c.errorDays} day${c.errorDays > 1 ? 's' : ''} could not be read (latest: ${c.errors.map((e) => `${e.date}: ${e.note}`).slice(0, 2).join('; ')}). Downloading the same range again retries them.` }) : null;
+  const minuteSummary = mc.indexDays
+    ? `${inr0.format(mc.indexDays)} index days, ${fmtDay(mc.indexFirst)} to ${fmtDay(mc.indexLast)} · option days: ${Object.entries(mc.bySymbol || {}).map(([s, n]) => `${S.meta.indices[s]?.short || s} ${n}`).join(' · ') || 'none yet'}`
+    : 'No minute data downloaded yet.';
+  const sourceNote = m?.source.connected
+    ? `Minute source is connected. Index bars go back to ${fmtDay(m.indexFrom)}; expired option prices begin with the ${fmtDay(m.optionsFrom)} expiry. Earlier dates in your range still download daily history.`
+    : `Minute source is not connected. ${m?.source.problem || 'Connect INDstocks from the Data button to add minute history.'} Daily history is still available.`;
   return el('div', { class: 'panel', id: 'rpData' },
-    el('div', { class: 'panel-h' }, el('h2', { text: 'Historical data' }), el('span', { class: 'note', text: `NSE's daily archives for ${status.symbols.map((s) => S.meta.indices[s]?.short || s).join(' and ')} options, the index closes and India VIX. Downloaded once, kept on this computer.` })),
+    el('div', { class: 'panel-h rp-download-heading' }, el('h2', { text: 'Replay data' }), el('span', { class: 'note', text: 'One range, one download. Covered daily dates and complete minute windows are skipped; partial minute windows refresh safely.' })),
     cov, gaps, errs,
-    el('div', { class: 'rp-form', style: { marginTop: '12px' } },
-      el('label', { class: 'f', for: 'rpFrom' }, 'From', from), el('label', { class: 'f', for: 'rpTo' }, 'To', to),
-      el('div', { class: 'rp-presets' }, preset('Last 3 months', 3), preset('6 months', 6), preset('1 year', 12), preset('2 years', 24)),
+    el('div', { class: 'rp-download-summary' },
+      el('b', { text: 'Minute history' }), el('span', { class: 'note', text: minuteSummary })),
+    el('div', { class: 'rp-download-controls' },
+      el('div', { class: 'rp-download-field' }, el('span', { class: 'rp-download-label', text: 'Indices' }), el('div', { class: 'rp-presets', id: 'rpSymbols' }, ...choices)),
+      el('div', { class: 'rp-download-field' }, el('span', { class: 'rp-download-label', text: 'Date range' }),
+        el('div', { class: 'rp-range' }, el('label', { class: 'f', for: 'rpFrom' }, 'From', from), el('label', { class: 'f', for: 'rpTo' }, 'To', to))),
+      el('div', { class: 'rp-presets' }, preset('3 months', 3), preset('6 months', 6), preset('1 year', 12), preset('All minute history', 0)),
       dl),
-    el('p', { class: 'note', style: { marginTop: '8px' }, text: 'About 1 MB and a second or two per trading day. Days you already have are skipped. Works with both of NSE\'s file formats (the old one before July 2024 and the current one).' }),
-    el('div', { id: 'rpProgress' }));
-}
-
-// Minute prices: one-minute bars from INDstocks for minute-by-minute sessions.
-function minutePanel() {
-  const m = status.minutes;
-  if (!m) return el('div', { class: 'panel' }, el('h2', { text: 'Minute prices' }), el('p', { class: 'note', style: { marginTop: '6px' }, text: 'Hidden during a blind session, because the list of downloaded days would give the dates away.' }));
-  const c = m.coverage, today = isoToday();
-  const to = el('input', { class: 'inp', type: 'date', id: 'rpMinTo', value: today, max: today, min: m.indexFrom, style: { width: '11em' } });
-  const from = el('input', { class: 'inp', type: 'date', id: 'rpMinFrom', value: back(today, 1), max: today, min: m.indexFrom, style: { width: '11em' } });
-  const preset = (label, months) => el('button', { class: 'btn ghost sm', type: 'button', text: label, onclick: () => { to.value = today; from.value = back(today, months); } });
-  const dl = el('button', { class: 'btn', type: 'button', id: 'rpMinDl', text: 'Download minute prices', disabled: !m.source.connected, onclick: async () => {
-    try { status.minutes.download = await api('/api/replay/minutes/download', { from: from.value, to: to.value }); watchDownload(); }
-    catch (e) { toast(e.message, 'err'); }
-  } });
-  const cov = c.days
-    ? el('div', { class: 'grid' },
-      stat('Minute days from', fmtDay(c.first)), stat('Minute days to', fmtDay(c.last)),
-      stat('Days ready', inr0.format(c.days), '', Object.entries(c.bySymbol).map(([s, n]) => `${S.meta.indices[s]?.short || s}: ${n}`).join(' · ')),
-      stat('Index only', inr0.format(Math.max(0, c.indexDays - c.days)), '', 'Days with an index chart but no option prices'))
-    : el('p', { class: 'note', text: c.indexDays ? `Index minutes for ${c.indexDays} days, but no option minute prices yet.` : 'No minute prices downloaded yet.' });
-  return el('div', { class: 'panel', id: 'rpMin' },
-    el('div', { class: 'panel-h' }, el('h2', { text: 'Minute prices' }), el('span', { class: 'note', text: 'One-minute prices from INDstocks, so a session can walk through each day minute by minute. Downloaded once, kept on this computer.' })),
-    cov,
-    c.needDaily ? el('p', { class: 'warnbox', style: { marginTop: '8px' }, text: `${c.needDaily} day${c.needDaily > 1 ? 's' : ''} with minute prices still need their daily history (open interest and the calendar come from it). Download the same dates in Historical data above.` }) : null,
-    m.source.connected ? null : el('p', { class: 'warnbox', style: { marginTop: '8px' }, text: m.source.problem }),
-    el('div', { class: 'rp-form', style: { marginTop: '12px' } },
-      el('label', { class: 'f', for: 'rpMinFrom' }, 'From', from), el('label', { class: 'f', for: 'rpMinTo' }, 'To', to),
-      el('div', { class: 'rp-presets' }, preset('Last month', 1), preset('3 months', 3), preset('6 months', 6)),
-      dl),
-    el('p', { class: 'note', style: { marginTop: '8px' }, text: `Option prices start with the ${fmtDay(m.optionsFrom)} expiry (the index from ${fmtDay(m.indexFrom)}), and only for contracts that have already expired. For each expiry the strikes around where the index traded are kept. A month takes about a minute and roughly 30 MB. The daily history for the same dates downloads too.` }),
-    el('div', { id: 'rpMinProgress' }));
+    el('p', { class: 'note', style: { marginTop: '8px' }, text: `Daily NSE archives include options and closing prices for the selected indices${status.symbols?.length > selected.size ? ' only' : ''}. ${sourceNote} Minute option prices are available only for expired contracts. About 30 MB per month of minute history.` }),
+    el('div', { id: 'rpProgress' }), el('div', { id: 'rpMinProgress' }));
 }
 
 function renderMinuteProgress() {
@@ -338,7 +333,7 @@ function renderMinuteProgress() {
       d.running ? el('button', { class: 'btn ghost sm', type: 'button', text: 'Cancel', onclick: () => api('/api/replay/minutes/cancel', {}).catch(() => {}) }) : null),
     d.error ? el('p', { class: d.running ? 'note' : 'warnbox', text: d.error }) : '',
     ...(d.notes || []).map((n) => el('p', { class: 'note', text: n })));
-  const btn = $('#rpMinDl'); if (btn) btn.disabled = d.running || !status.minutes.source.connected;
+  const btn = $('#rpDl'); if (btn) btn.disabled = d.running || Boolean(status.download?.running);
 }
 
 function renderProgress() {
@@ -353,7 +348,7 @@ function renderProgress() {
     el('div', { class: 'rp-prog-row' }, el('span', { class: 'note', text: msg }), el('span', { class: 'sp' }),
       d.running ? el('button', { class: 'btn ghost sm', type: 'button', text: 'Cancel', onclick: () => api('/api/replay/download/cancel', {}).catch(() => {}) }) : null),
     d.error ? el('p', { class: d.running ? 'note' : 'warnbox', text: d.error }) : '');
-  const btn = $('#rpDl'); if (btn) btn.disabled = d.running;
+  const btn = $('#rpDl'); if (btn) btn.disabled = d.running || Boolean(status.minutes?.download?.running);
 }
 
 function watchDownload() {

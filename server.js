@@ -108,9 +108,9 @@ const routes = {
   // Replay (simulated mode only)
   'GET /api/replay': async () => needReplay().status(),
   'GET /api/replay/journal': async () => needReplay().account.journal(),
-  'POST /api/replay/download': async (q, b) => needReplay().downloader.start(b.from, b.to, { retryHolidays: Boolean(b.retryHolidays) }),
+  'POST /api/replay/download': async (q, b) => needReplay().downloader.start(b.from, b.to, { retryHolidays: Boolean(b.retryHolidays), symbols: b.symbols }),
   'POST /api/replay/download/cancel': async () => needReplay().downloader.cancel(),
-  'POST /api/replay/minutes/download': async (q, b) => needReplay().minutes.start(b.from, b.to),
+  'POST /api/replay/minutes/download': async (q, b) => needReplay().minutes.start(b.from, b.to, b.symbols),
   'POST /api/replay/minutes/cancel': async () => needReplay().minutes.cancel(),
   'POST /api/replay/start': async (q, b) => needReplay().start(b),
   'POST /api/replay/step': async (q, b) => needReplay().step(b),
