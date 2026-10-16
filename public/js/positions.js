@@ -6,10 +6,13 @@ import { bs, yearsTo } from './bs.js';
 import { drawPayoff, payoffLegend } from './payoff.js';
 import { hexA } from './markets.js';
 
-let root, eqChart = null, eqSeries = null, group = null, resetArmed = false;
+let root, eqChart = null, eqSeries = null, group = null, resetArmed = false, exitDlg;
 
 export function init(sec) {
   root = sec;
+  exitDlg = el('dialog', { class: 'exit-rule-dialog', 'aria-label': 'Stop-loss and take-profit rules' });
+  document.body.append(exitDlg);
+  exitDlg.addEventListener('click', (e) => { if (e.target === exitDlg) exitDlg.close(); });
   root.append(
     el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: S.meta.replay ? 'Replay account' : 'Paper account' }), el('span', { class: 'note', id: 'acSince' })), el('div', { class: 'grid', id: 'acStats' })),
     el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Open positions' }), el('span', { class: 'sp' }), el('span', { class: 'note', text: S.meta.replay ? (S.meta.replay.intraday ? 'Marked at the last trade before the replay minute (the closing price once the day ends).' : 'Marked at the day\'s closing price.') : 'Marked at the live bid–ask midpoint. Refreshes every 5 s.' }), el('button', { class: 'btn danger sm', type: 'button', id: 'acExitAll', text: 'Exit all', onclick: exitAll })),
@@ -52,7 +55,7 @@ function render() {
   );
   // Positions
   const t = $('#acPos');
-  t.replaceChildren(el('thead', {}, el('tr', {}, ['Instrument', 'Expiry', 'Lots', 'Avg price', 'Now', 'Bid / ask', 'P&L', '', ''].map((h, i) => el('th', { class: i < 2 ? 'l' : '' }, term(h))))));
+  t.replaceChildren(el('thead', {}, el('tr', {}, ['Instrument', 'Expiry', 'Lots', 'Avg price', 'Now', 'Bid / ask', 'P&L', 'Return / exits', 'Action'].map((h, i) => el('th', { class: i < 2 || i === 7 ? 'l' : '' }, term(h))))));
   const tb = el('tbody');
   for (const p of a.positions) {
     const cost = Math.abs(p.avg * p.qty);
@@ -61,7 +64,11 @@ function render() {
       el('td', { class: 'l t', text: `${p.expiry.slice(8)}/${p.expiry.slice(5, 7)} · ${fmtLeft(p.expiry)}` }),
       el('td', { text: `${p.qty > 0 ? '+' : '−'}${p.lots} (${Math.abs(p.qty)})` }), el('td', { text: inr2.format(p.avg) }), el('td', { text: inr2.format(p.mark) }),
       el('td', { class: 'muted', text: p.bid != null ? `${inr2.format(p.bid)} / ${inr2.format(p.ask)}` : '—' }),
-      el('td', { class: tone(p.pnl), text: srs(p.pnl) }), el('td', { class: tone(p.pnl), text: cost ? pct(p.pnl / cost * 100, 1) : '' }),
+      el('td', { class: tone(p.pnl), text: srs(p.pnl) }),
+      el('td', { class: 'l exit-rule-cell' },
+        el('span', { class: 'muted', text: cost ? pct(p.pnl / cost * 100, 1) : '' }),
+        el('div', { class: 'note exit-rule-summary', text: exitRuleText(p.exitRules) }),
+        el('button', { class: 'btn ghost sm', type: 'button', text: p.exitRules ? 'Edit exits' : 'Set exits', onclick: () => editExitRules(p) })),
       el('td', {}, el('button', { class: 'btn ghost sm', type: 'button', text: 'Exit', onclick: (e) => exitOne(p, e.target) }))));
   }
   if (!a.positions.length) tb.append(el('tr', {}, el('td', { class: 'l t empty', colspan: '9', text: 'No open positions. Buy or sell from the option chain, or place a strategy from the builder.' })));
@@ -80,6 +87,36 @@ function render() {
     el('tbody', {}, a.orders.length ? a.orders.map((x) => el('tr', {}, el('td', { class: 'l', text: fmtWhen(x.t, S.meta.replay) }), el('td', { class: 'l t', text: instrument(x) }),
       el('td', { class: 'l ' + (x.side === 'BUY' ? 'up' : 'down'), text: x.side === 'BUY' ? 'Buy' : 'Sell' }), el('td', { text: String(x.lots) }), el('td', { text: inr2.format(x.price) }), el('td', { text: inr2.format(x.charges) }),
       el('td', { class: tone(x.realized), text: x.realized ? srs(x.realized) : '' }), el('td', { class: 'l t muted wrap' }, [x.tag, x.note, x.plan ? `Exit plan: ${x.plan}` : ''].filter(Boolean).join(' · '), x.explanation ? explainPnl(x.explanation) : null))) : [el('tr', {}, el('td', { class: 'l t empty', colspan: '8', text: 'No orders yet.' }))]));
+}
+
+function exitRuleText(rules) {
+  if (!rules) return 'No automatic exits';
+  return [rules.stop != null ? `Stop ₹${inr2.format(rules.stop)}` : '', rules.target != null ? `Target ₹${inr2.format(rules.target)}` : ''].filter(Boolean).join(' · ');
+}
+
+function editExitRules(p) {
+  const stop = el('input', { class: 'inp', id: 'exitStop', type: 'number', min: '0.05', step: '0.05', value: p.exitRules?.stop ?? '', placeholder: 'Option price' });
+  const target = el('input', { class: 'inp', id: 'exitTarget', type: 'number', min: '0.05', step: '0.05', value: p.exitRules?.target ?? '', placeholder: 'Option price' });
+  const side = p.qty > 0 ? 'long' : 'short';
+  const save = el('button', { class: 'btn', type: 'button', text: 'Save exit rules', onclick: async (e) => {
+    if ((stop.value && !stop.reportValidity()) || (target.value && !target.reportValidity())) return;
+    e.target.disabled = true;
+    try {
+      const result = await api('/api/exit-rules', { key: p.key, stop: stop.value, target: target.value });
+      S.account = result.account; emit('account', result.account); exitDlg.close();
+      toast(stop.value || target.value ? 'Automatic exits saved.' : 'Automatic exits removed.', 'ok');
+    } catch (err) { toast(err.message, 'err'); e.target.disabled = false; }
+  } });
+  exitDlg.replaceChildren(
+    el('div', { class: 'tk-h' }, el('div', {}, el('h3', { text: 'Stop-loss and take-profit' }), el('div', { class: 'note', text: `${p.symbol} ${inr0.format(p.strike)} ${p.type} · ${side} position` })),
+      el('button', { class: 'x', type: 'button', 'aria-label': 'Close', text: '×', onclick: () => exitDlg.close() })),
+    el('div', { class: 'exit-rule-body' },
+      el('label', { class: 'f', for: 'exitStop' }, 'Stop-loss trigger (option price, ₹)', stop),
+      el('label', { class: 'f', for: 'exitTarget' }, 'Take-profit trigger (option price, ₹)', target),
+      el('p', { class: 'note', text: `${p.qty > 0 ? 'For a long position, the stop is below and the target is above' : 'For a short position, the stop is above and the target is below'} the current option price. Leave a field blank to turn off that exit; leave both blank to remove the rules.` }),
+      el('p', { class: 'note', text: `Triggers use this option's last traded price and close the whole position with a paper market order. Live checks run while the app is open and visible; replay checks each step. Fast price moves can fill past a stop.` })),
+    el('div', { class: 'tk-f' }, el('button', { class: 'btn ghost', type: 'button', text: 'Cancel', onclick: () => exitDlg.close() }), save));
+  if (!exitDlg.open) exitDlg.showModal();
 }
 
 function explainPnl(x) {

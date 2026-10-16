@@ -107,6 +107,10 @@ const routes = {
     return { ...(await canTrade().place(b.legs, b.tag || '', b.note || '', b.plan || '')), account: await account.summary() };
   }),
   'POST /api/exit': async (q, b) => tradeLock(async () => ({ ...(await canTrade().exit(b.key)), account: await account.summary() })),
+  'POST /api/exit-rules': async (q, b) => tradeLock(async () => {
+    const a = canTrade(); a.setExitRules(b.key, { stop: b.stop, target: b.target });
+    return { account: await a.summary() };
+  }),
   'POST /api/reset': async (q, b) => { if (MOCK) throw new Error('Start a new replay session in the Replay tab instead.'); account.reset(b.balance); return account.summary(); },
   // Replay (simulated mode only)
   'GET /api/replay': async () => needReplay().status(),
