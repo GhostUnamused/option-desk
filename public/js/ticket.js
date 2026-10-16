@@ -4,6 +4,7 @@ import { term } from './glossary.js';
 import { S, emit, cfg, refreshAccount } from './state.js';
 
 let dlg, legs = [], basket = false, tag = '', note = '', pvTimer = null, liveTimer = null, seq = 0, placing = false, onPlaced = null;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function init() {
   dlg = $('#ticket');
@@ -71,7 +72,18 @@ function preview() {
   pvTimer = setTimeout(async () => {
     const my = ++seq; const box = $('#tkPv'); if (!box) return;
     try {
-      const pv = await api('/api/preview', { legs });
+      let pv;
+      try { pv = await api('/api/preview', { legs }); }
+      catch (e) {
+        // Preview is read-only, so retry once if the local server drops this request transiently.
+        if (!(e instanceof TypeError)) throw e;
+        await wait(350);
+        try { pv = await api('/api/preview', { legs }); }
+        catch (retryError) {
+          if (retryError instanceof TypeError) throw new Error('Option Desk stopped responding while fetching quotes. Reopen the app and try again.');
+          throw retryError;
+        }
+      }
       if (my !== seq || !dlg.open) return;
       const kv = (k, v, cls = '') => [el('span', { class: 'k' }, term(k)), el('span', { class: 'v ' + cls, text: v })];
       const rows = [];

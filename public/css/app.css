@@ -370,6 +370,10 @@ td.wrap { white-space: normal; min-width: 180px; }
 .replay-bar[hidden] { display: none; }
 .replay-bar .sp { flex: 1; }
 .replay-bar .rp-date { font-family: var(--display); font-size: 1rem; white-space: nowrap; }
+.rp-jump { position: relative; }
+.rp-jump summary { cursor: pointer; color: var(--muted); font-size: .84rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; white-space: nowrap; }
+.rp-jump[open] summary { color: var(--fg); border-color: #444; }
+.rp-jump .transport { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; box-shadow: var(--shadow); }
 .sel.sm { min-height: 30px; padding: 3px 8px; font-size: .84rem; }
 .tabs button[role=tab].off { opacity: .45; }
 .rp-form { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }

@@ -2,7 +2,7 @@
 
 A practice desk for NSE index options. Learn how options are priced, watch live quotes and charts, read a broker-style option chain, build strategies, and trade them on a paper account with a dummy balance. No real money and no real orders, ever.
 
-Current version: **0.7.4**
+Current version: **0.7.5**
 
 ## Start it
 
@@ -34,7 +34,7 @@ Replay mode replaces live prices with NSE's own end-of-day records, so you can p
 1. **Download history** in the Replay tab: pick a date range (three to six months is a good start). The app fetches NSE's daily F&O bhavcopy (the old format before July 2024 and the current UDiFF one), the NIFTY 50 and NIFTY BANK closes and India VIX, keeps NIFTY and BANK NIFTY options, and stores them on your computer in `replay.db`. About 1 MB to download per trading day; nothing is bundled in the app.
 2. **Start a session** on a day of your choice, or a random day. Tick **Blind mode** to hide the real date until you finish: dates are shifted to a made-up year, while weekdays and days to expiry stay true.
 3. **Trade** from the option chain or strategy builder as usual. Each option's implied volatility and Greeks are worked out from its closing price (the risk-free rate is a setting). Orders fill at the day's close plus slippage (more for strikes far from the index or with few trades), and strikes that did not trade that day are refused. The order ticket asks why you are taking the trade, and that goes into your journal.
-4. **Move forward** with the bar under the tabs: **+1 day**, **+1 week**, **Next expiry**, or **Play** to step one trading day every few seconds. Weekends and holidays are skipped, and positions still open on expiry day settle at that day's index close.
+4. **Watch the session unfold** in minute-by-minute mode: **Play** advances one market minute at a time. It pauses at the close so you can review before continuing. Choose Slow, Normal, Fast or Very fast to set the pace. Manual minute controls remain available; larger jumps are under **Jump ahead**. In close-only sessions, Play advances one trading day at a time. Weekends and holidays are skipped, and positions still open on expiry day settle at that day's index close.
 5. **End the session** to see your summary: P&L, win rate, best and worst day, largest drop, charges, P&L by day and every trade with your reason.
 
 The replay balance (`replay.json`) is separate from the live paper account. Every number on screen comes from the replay day or earlier; the code that reads history refuses anything dated later.

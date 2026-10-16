@@ -8,7 +8,6 @@ import { S, emit, on, newDay } from './state.js';
 import { setClock } from './bs.js';
 
 let root, bar, playing = false, speed = store.get('replaySpeed', 2000), stepping = false, dlTimer = null, status = null;
-let playBy = store.get('replayPlayBy', 'min1'); // what one auto-play step is in a minute-by-minute session: min1 | min5 | day
 const R = () => S.meta.replay;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isoToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -24,7 +23,6 @@ export function init(sec) {
   on('account', () => { if (S.tab === 'replay' && R().active) renderJournalSoon(); });
   document.addEventListener('keydown', (e) => {
     if (!R().active || e.target.closest('input, textarea, select, dialog') || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); step('day'); }
     if ((e.key === 'm' || e.key === 'M') && R().running) { e.preventDefault(); step('minutes', false, 1); }
   });
 }
@@ -47,14 +45,12 @@ function renderBar() {
   const exp = expirySummary(r);
   const btn = (text, title, fn, can = r.hasNext) => el('button', { type: 'button', text, title, disabled: stepping || playing || !can, onclick: fn });
   const minuteMode = r.intraday && r.running;
-  const playTitle = minuteMode && playBy !== 'day' ? `Move forward ${playBy === 'min5' ? 'five minutes' : 'one minute'} at a time until you press Pause, then on to the next day. Pauses while an order ticket is open.` : 'Move forward one trading day at a time until you press Pause. Pauses while an order ticket is open.';
+  const playTitle = minuteMode ? 'Advance one market minute at a time until you press Pause. Playback pauses at the close and while an order ticket is open.' : 'Move forward one trading day at a time until you press Pause. Pauses while an order ticket is open.';
   const play = el('button', { class: 'play' + (playing ? ' on' : ''), type: 'button', id: 'rpPlay', 'aria-pressed': String(playing), text: playing ? 'Pause' : 'Play', title: playTitle, disabled: !r.hasNext && !r.running && !playing, onclick: togglePlay });
-  const unit = r.intraday && playBy !== 'day' ? 'a step' : 'a day';
+  const unit = r.intraday ? 'min' : 'day';
   const sp = el('select', { class: 'sel sm', 'aria-label': 'Auto-play speed', title: 'Auto-play speed', onchange: (e) => { speed = +e.target.value; store.set('replaySpeed', speed); } },
-    [[4000, 'Slow'], [2000, 'Normal'], [800, 'Fast']].map(([v, t]) => new Option(`${t} (${v / 1000} s ${unit})`, v, false, v === speed)));
-  const by = r.intraday ? el('select', { class: 'sel sm', 'aria-label': 'Auto-play step', title: 'How far each auto-play step moves', onchange: (e) => { playBy = e.target.value; store.set('replayPlayBy', playBy); renderBar(); } },
-    [['min1', 'Play by 1 min'], ['min5', 'Play by 5 min'], ['day', 'Play by day']].map(([v, t]) => new Option(t, v, false, v === playBy))) : '';
-  const tip = r.intraday && !r.running ? (r.hasNext ? 'The market has closed for this day. Step to the next day.' : '') : '';
+    [[4000, 'Slow'], [2000, 'Normal'], [800, 'Fast'], [400, 'Very fast']].map(([v, t]) => new Option(`${t} (${v / 1000} s / ${unit})`, v, false, v === speed)));
+  const tip = r.intraday && !r.running ? (r.hasNext ? 'Market closed. Resume when you are ready.' : '') : '';
   bar.replaceChildren(
     el('span', { class: 'pill warn', text: r.blind ? 'Blind replay' : 'Replay' }),
     el('b', { class: 'rp-date', text: dayLabel, title: r.blind ? 'Blind mode: the real date is hidden until you end the session.' : minuteMode ? `Prices are the last trades before ${r.time} IST on this day.` : 'Prices are this day\'s closing prices.' }),
@@ -65,12 +61,14 @@ function renderBar() {
       btn('+5 min', 'Five minutes ahead', () => step('minutes', false, 5), true),
       btn('+15 min', 'Fifteen minutes ahead', () => step('minutes', false, 15), true),
       btn('To close', `Jump to 15:30, when the day closes (${r.minutesLeft} minutes from now). Positions expiring today settle then.`, () => step('close'), true)) : '',
-    el('div', { class: 'transport', role: 'group', 'aria-label': 'Move forward in time' },
-      btn(r.intraday ? 'Next day' : '+1 day', `Next trading day${r.intraday ? ', from its opening minute' : ''} (shortcut: N)`, () => step('day')),
-      btn('+1 week', 'Jump a week ahead, one trading day at a time', () => step('week')),
-      btn('Next expiry', `Jump to the next ${S.meta.indices[S.symbol]?.short || ''} expiry day${r.intraday ? ' (or, on expiry day, to its close)' : ''}. Positions expiring then are settled at that day's close.`, () => step('expiry')),
-      play),
-    by || '', sp,
+    el('div', { class: 'transport', role: 'group', 'aria-label': 'Replay playback' }, play),
+    r.intraday ? el('span', { class: 'note', text: 'Play advances one market minute; it pauses at the close.' }) : '', sp,
+    el('details', { class: 'rp-jump' },
+      el('summary', { text: 'Jump ahead' }),
+      el('div', { class: 'transport', role: 'group', 'aria-label': 'Jump ahead in replay' },
+        btn(r.intraday ? 'Next day' : '+1 day', `Next trading day${r.intraday ? ', from its opening minute' : ''}`, () => step('day')),
+        btn('+1 week', 'Jump a week ahead, one trading day at a time', () => step('week')),
+        btn('Next expiry', `Jump to the next ${S.meta.indices[S.symbol]?.short || ''} expiry day${r.intraday ? ' (or, on expiry day, to its close)' : ''}. Positions expiring then are settled at that day's close.`, () => step('expiry')))),
     !r.hasNext && !r.running ? el('span', { class: 'note', text: 'End of downloaded history' }) : '');
 }
 
@@ -129,9 +127,10 @@ async function togglePlay() {
   playing = !playing; renderBar();
   while (playing) {
     if (!$('#ticket').open && !document.hidden) {
-      const r = R(), byMinute = r.intraday && r.running && playBy !== 'day';
-      const ok = byMinute ? await step('minutes', true, playBy === 'min5' ? 5 : 1) : await step('day', true);
-      if (!ok || (!R().hasNext && !R().running)) { playing = false; renderBar(); break; }
+      const r = R(), byMinute = r.intraday && r.running;
+      const ok = byMinute ? await step('minutes', true, 1) : await step('day', true);
+      // In an intraday session, let the trader review the close before moving to another day.
+      if (!ok || (r.intraday && !R().running) || (!R().hasNext && !R().running)) { playing = false; renderBar(); break; }
     }
     await sleep(speed);
   }
@@ -154,7 +153,7 @@ async function renderTab() {
 }
 
 function intro() {
-  return el('p', { class: 'intro' }, el('b', { text: 'Practise on real past days.' }), ' Pick a day in history and trade it at that day\'s closing prices, or minute by minute through the day, then step forward a few minutes, a day, a week or to the next expiry. Your replay balance is separate from the live paper account, so practise freely.');
+  return el('p', { class: 'intro' }, el('b', { text: 'Practise on real past days.' }), ' Pick a day in history and trade at the close, or turn on minute by minute replay to watch a session unfold. Play moves one market minute at a time and pauses at the close; larger jumps are tucked under Jump ahead. Your replay balance is separate from the live paper account.');
 }
 
 const stat = (k, v, cls, s) => el('div', { class: 'stat' }, el('div', { class: 'k' }, term(k)), el('div', { class: 'v ' + (cls || ''), text: v }), s ? el('div', { class: 's', text: s }) : null);
