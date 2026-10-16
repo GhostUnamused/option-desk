@@ -2,7 +2,7 @@
 
 A practice desk for NSE index options. Learn how options are priced, watch live quotes and charts, read a broker-style option chain, build strategies, and trade them on a paper account with a dummy balance. No real money and no real orders, ever.
 
-Current version: **0.7.6**
+Current version: **0.7.7**
 
 ## Start it
 
