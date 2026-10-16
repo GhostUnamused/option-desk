@@ -197,7 +197,7 @@ async function journalPanel(final) {
     stat('Largest drop', rs(-st.maxDrawdown), st.maxDrawdown ? 'down' : '', 'Biggest fall from a high point of your account'),
     stat('Charges paid', rs(st.charges), '', `${st.orders} order${st.orders === 1 ? '' : 's'} placed`));
   const out = [head, stats];
-  if (final) out.push(reflection(st));
+  if (final) out.push(reflection(st), reviewPanel(j.session?.review));
   out.push(el('div', { class: 'cols', style: { marginTop: '12px' } },
     el('div', {}, el('h3', { class: 'sub', text: 'P&L by day' }), daysChart(j.days), daysTable(j.days, sess)),
     el('div', {}, el('h3', { class: 'sub', text: 'Trades and your reasons' }), tradesList(j.trades, sess))));
@@ -218,6 +218,26 @@ function reflection(st) {
     if (st.winRate != null && st.avgLoss != null && st.avgWin != null && Math.abs(st.avgLoss) > st.avgWin * 1.5) lines.push('Your average loss is much bigger than your average win. Decide where you will exit before you enter.');
   }
   return el('p', { class: 'summary', style: { marginTop: '12px' }, text: lines.join(' ') });
+}
+
+function reviewPanel(saved = {}) {
+  const fields = [
+    ['whatWorked', 'What did you do according to plan?', 'Name the decision or rule you followed well.'],
+    ['surprise', 'What surprised you about the result?', 'Think about the index move, time decay, volatility, or charges.'],
+    ['nextTime', 'What one thing will you try differently next time?', 'Keep it specific enough to use in your next session.'],
+  ];
+  const inputs = Object.fromEntries(fields.map(([key, label, hint]) => [key, el('textarea', { class: 'inp note-in', rows: '2', maxlength: '1000', 'aria-label': label, placeholder: hint }, saved[key] || '')]));
+  return el('div', { class: 'panel rp-review' },
+    el('div', { class: 'panel-h' }, el('h2', { text: 'Your replay review' }), el('span', { class: 'note', text: 'A short debrief helps turn the result into a lesson.' })),
+    ...fields.map(([key, label]) => el('label', { class: 'f' }, label, inputs[key])),
+    el('button', { class: 'btn', type: 'button', text: saved.t ? 'Save review again' : 'Save review', onclick: async (e) => {
+      const button = e.currentTarget; button.disabled = true; button.textContent = 'Saving…';
+      try {
+        await api('/api/replay/review', { review: Object.fromEntries(fields.map(([key]) => [key, inputs[key].value])) });
+        button.disabled = false; button.textContent = 'Save review again'; toast('Your replay review was saved.', 'ok');
+      } catch (err) { button.disabled = false; button.textContent = saved.t ? 'Save review again' : 'Save review'; toast(err.message, 'err'); }
+    } }),
+    saved.t ? el('span', { class: 'note', text: 'Saved on this device with the replay session.' }) : null);
 }
 
 function daysChart(days) {
@@ -255,7 +275,9 @@ function tradesList(trades, sess) {
       el('span', { text: `${o.lots} × ${instrument(o)} @ ₹${inr2.format(o.price)}` }),
       el('span', { class: 'sp' }),
       o.realized ? el('b', { class: tone(o.realized), text: srs(o.realized) }) : null),
-    o.note ? el('p', { class: 'rp-note', text: o.note }) : o.tag ? el('p', { class: 'note', text: o.tag }) : el('p', { class: 'note', text: 'No reason written down.' }))));
+    o.note ? el('p', { class: 'rp-note', text: o.note }) : o.tag ? el('p', { class: 'note', text: o.tag }) : el('p', { class: 'note', text: 'No reason written down.' }),
+    o.plan ? el('p', { class: 'note', text: `Exit plan: ${o.plan}` }) : null,
+    o.explanation ? el('p', { class: 'note', text: `P&L estimate — index ${srs(o.explanation.spot)}, time ${srs(o.explanation.time)}, IV ${srs(o.explanation.volatility)}, pricing/fill ${srs(o.explanation.residual)}; after charges ${srs(o.explanation.netAfterCharges)}. ${o.explanation.note}` }) : null)));
 }
 
 function startPanel() {

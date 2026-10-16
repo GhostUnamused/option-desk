@@ -102,7 +102,10 @@ const routes = {
   },
   'GET /api/account': async () => needAccount().summary(),
   'POST /api/preview': async (q, b) => needAccount().preview(b.legs),
-  'POST /api/order': async (q, b) => tradeLock(async () => ({ ...(await canTrade().place(b.legs, b.tag || '', b.note || '')), account: await account.summary() })),
+  'POST /api/order': async (q, b) => tradeLock(async () => {
+    if (!String(b.note || '').trim()) throw new Error('Write at least one character in your journal entry before placing the trade.');
+    return { ...(await canTrade().place(b.legs, b.tag || '', b.note || '', b.plan || '')), account: await account.summary() };
+  }),
   'POST /api/exit': async (q, b) => tradeLock(async () => ({ ...(await canTrade().exit(b.key)), account: await account.summary() })),
   'POST /api/reset': async (q, b) => { if (MOCK) throw new Error('Start a new replay session in the Replay tab instead.'); account.reset(b.balance); return account.summary(); },
   // Replay (simulated mode only)
@@ -115,6 +118,7 @@ const routes = {
   'POST /api/replay/start': async (q, b) => needReplay().start(b),
   'POST /api/replay/step': async (q, b) => needReplay().step(b),
   'POST /api/replay/end': async () => needReplay().end(),
+  'POST /api/replay/review': async (q, b) => needReplay().saveReview(b.review || {}),
   'POST /api/replay/settings': async (q, b) => needReplay().setRiskFree(b.riskFreePct),
   // Stock options: search the stocks that have options, and follow or drop one (live mode, INDstocks).
   'GET /api/stocks': async (q) => {

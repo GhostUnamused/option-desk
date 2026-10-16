@@ -79,7 +79,16 @@ function render() {
   o.replaceChildren(el('thead', {}, el('tr', {}, ['Time', 'Instrument', 'Side', 'Lots', 'Price', 'Charges', 'Booked P&L', 'Note'].map((h, i) => el('th', { class: i < 3 || i === 7 ? 'l' : '' }, term(h))))),
     el('tbody', {}, a.orders.length ? a.orders.map((x) => el('tr', {}, el('td', { class: 'l', text: fmtWhen(x.t, S.meta.replay) }), el('td', { class: 'l t', text: instrument(x) }),
       el('td', { class: 'l ' + (x.side === 'BUY' ? 'up' : 'down'), text: x.side === 'BUY' ? 'Buy' : 'Sell' }), el('td', { text: String(x.lots) }), el('td', { text: inr2.format(x.price) }), el('td', { text: inr2.format(x.charges) }),
-      el('td', { class: tone(x.realized), text: x.realized ? srs(x.realized) : '' }), el('td', { class: 'l t muted wrap', text: [x.tag, x.note].filter(Boolean).join(' · ') }))) : [el('tr', {}, el('td', { class: 'l t empty', colspan: '8', text: 'No orders yet.' }))]));
+      el('td', { class: tone(x.realized), text: x.realized ? srs(x.realized) : '' }), el('td', { class: 'l t muted wrap' }, [x.tag, x.note, x.plan ? `Exit plan: ${x.plan}` : ''].filter(Boolean).join(' · '), x.explanation ? explainPnl(x.explanation) : null))) : [el('tr', {}, el('td', { class: 'l t empty', colspan: '8', text: 'No orders yet.' }))]));
+}
+
+function explainPnl(x) {
+  const row = (label, value) => el('div', { class: 'kv' }, el('span', { class: 'k', text: label }), el('span', { class: 'v ' + tone(value), text: srs(value) }));
+  return el('details', { class: 'pnl-explain' }, el('summary', { text: 'Explain P&L' }),
+    row('Index movement', x.spot), row('Time passing', x.time), row('IV change', x.volatility),
+    row('Pricing and fill difference', x.residual), row('Gross booked P&L', x.gross),
+    row('Entry and exit charges', -(x.entryCharges + x.exitCharges)), row('After these charges', x.netAfterCharges),
+    el('p', { class: 'note', text: x.note }));
 }
 
 // Brokerage is what the broker keeps; the rest goes to the government and the exchange.

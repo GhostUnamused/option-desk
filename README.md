@@ -2,7 +2,7 @@
 
 A practice desk for NSE index options. Learn how options are priced, watch live quotes and charts, read a broker-style option chain, build strategies, and trade them on a paper account with a dummy balance. No real money and no real orders, ever.
 
-Current version: **0.7.5**
+Current version: **0.7.6**
 
 ## Start it
 
@@ -21,9 +21,9 @@ Current version: **0.7.5**
 | Learn | Six short lessons on what moves an option's price (premium, delta, theta, vega, gamma, buying vs selling), each with a slider experiment and a check question. Includes a Black–Scholes playground and a Greeks cheat sheet. Progress is remembered. |
 | Markets | Index chart (intraday, or daily candles with 20/50-day averages), a plain-English market read (trend, India VIX and its yearly percentile, implied vs realized volatility, expected move, put–call ratio, OI walls, max pain), and all F&O index quotes. |
 | Option chain | NIFTY, BANK NIFTY, FIN NIFTY, MIDCAP NIFTY and NIFTY NEXT 50, every expiry. Hover a row and press B or S to trade; click a price for that option's intraday chart and Greeks. |
-| Strategy builder | Twelve preset strategies or your own legs, at live fill prices. Payoff chart, chance of profit, max profit and loss, breakevens, Greeks, a what-if grid and margin. Place the whole strategy as one paper trade. |
-| Replay (replay mode) | Download NSE history, start a session on any past day (optionally blind), step through it day by day, and read your trade journal and end-of-session summary. |
-| Paper account | ₹5,00,000 starting balance (changeable). Open positions with live P&L, a payoff chart of what you hold, account value over time, order history and reset. |
+| Strategy builder | Twelve preset strategies or your own legs, at live fill prices. Payoff chart, chance of profit, max profit and loss, breakevens, Greeks, margin, and a scenario grid for index moves, time and IV changes. Place the whole strategy as one paper trade. |
+| Replay (replay mode) | Download NSE history, start a session on any past day (optionally blind), step through it day by day, write a trade thesis and exit plan, then save a guided end-of-session review. |
+| Paper account | ₹5,00,000 starting balance (changeable). Open positions with live P&L, a payoff chart of what you hold, account value over time, order history, and a model-based P&L explanation when a position closes. The order ticket requires a journal entry before placing a trade. |
 
 Also: India VIX (the market's "fear gauge") in the header, a **Beginner guide** button, and dotted-underlined words that explain themselves when you hover or tap them.
 
@@ -33,15 +33,17 @@ Replay mode replaces live prices with NSE's own end-of-day records, so you can p
 
 1. **Download history** in the Replay tab: pick a date range (three to six months is a good start). The app fetches NSE's daily F&O bhavcopy (the old format before July 2024 and the current UDiFF one), the NIFTY 50 and NIFTY BANK closes and India VIX, keeps NIFTY and BANK NIFTY options, and stores them on your computer in `replay.db`. About 1 MB to download per trading day; nothing is bundled in the app.
 2. **Start a session** on a day of your choice, or a random day. Tick **Blind mode** to hide the real date until you finish: dates are shifted to a made-up year, while weekdays and days to expiry stay true.
-3. **Trade** from the option chain or strategy builder as usual. Each option's implied volatility and Greeks are worked out from its closing price (the risk-free rate is a setting). Orders fill at the day's close plus slippage (more for strikes far from the index or with few trades), and strikes that did not trade that day are refused. The order ticket asks why you are taking the trade, and that goes into your journal.
+3. **Trade** from the option chain or strategy builder as usual. Each option's implied volatility and Greeks are worked out from its closing price (the risk-free rate is a setting). Orders fill at the day's close plus slippage (more for strikes far from the index or with few trades), and strikes that did not trade that day are refused. The order ticket asks for your trade thesis and what would prove it wrong; both go into your journal.
 4. **Watch the session unfold** in minute-by-minute mode: **Play** advances one market minute at a time. It pauses at the close so you can review before continuing. Choose Slow, Normal, Fast or Very fast to set the pace. Manual minute controls remain available; larger jumps are under **Jump ahead**. In close-only sessions, Play advances one trading day at a time. Weekends and holidays are skipped, and positions still open on expiry day settle at that day's index close.
-5. **End the session** to see your summary: P&L, win rate, best and worst day, largest drop, charges, P&L by day and every trade with your reason.
+5. **End the session** to see your summary: P&L, win rate, best and worst day, largest drop, charges, P&L by day and every trade with your reason and exit plan. Answer the review prompts and save what you learned with the session.
 
 The replay balance (`replay.json`) is separate from the live paper account. Every number on screen comes from the replay day or earlier; the code that reads history refuses anything dated later.
 
 ## How paper trades work
 
 - Buys fill at the current ask and sells at the current bid, like a real exchange. Market orders only.
+- Before placing a trade from the order ticket, enter at least one non-space character in the required journal field. The entry is saved with the order and appears in order history.
+- Closed positions can show a model-based estimate of how spot, time and implied-volatility changes affected P&L, alongside entry and exit charges. It needs an opening snapshot, so positions opened before this feature was added may not have a breakdown.
 - Every leg pays charges: ₹20 brokerage, STT on sell premium, exchange and SEBI fees, GST and stamp duty (a typical discount-broker schedule).
 - Selling options blocks an estimated margin: the worst expiry loss if the index moves ±9%, plus 2% exposure on unhedged short lots. Real broker margins (SPAN) differ.
 - Positions still open after 3:30 pm on expiry day settle at intrinsic value against the index close.

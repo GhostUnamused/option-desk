@@ -404,6 +404,11 @@ h3.sub { font-size: .95rem; margin-bottom: 8px; }
 .rp-how { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 0 18px; font-size: .88rem; line-height: 1.5; color: var(--muted); }
 .rp-how b { color: var(--fg); font-weight: 600; }
 textarea.note-in { width: 100%; font-family: var(--body); resize: vertical; min-height: 56px; color: var(--fg); }
+.rp-review { display: grid; gap: 10px; }
+.rp-review .panel-h { margin-bottom: 0; }
+.pnl-explain { margin-top: 6px; min-width: 210px; color: var(--fg); }
+.pnl-explain summary { cursor: pointer; color: var(--accent-text); }
+.pnl-explain .kv { padding-top: 4px; }
 .chain td.notraded > span:first-child { opacity: .45; }
 
 /* ---- Study chart: price chart, indicator panes, legends ---- */

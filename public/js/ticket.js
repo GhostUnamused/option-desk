@@ -3,7 +3,7 @@ import { api, el, $, inr2, rs, rs2, srs, instrument, toast, fmtLeft } from './ut
 import { term } from './glossary.js';
 import { S, emit, cfg, refreshAccount } from './state.js';
 
-let dlg, legs = [], basket = false, tag = '', note = '', pvTimer = null, liveTimer = null, seq = 0, placing = false, onPlaced = null;
+let dlg, legs = [], basket = false, tag = '', note = '', plan = '', pvTimer = null, liveTimer = null, seq = 0, placing = false, latestPreviewOk = false, onPlaced = null;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function init() {
@@ -12,14 +12,15 @@ export function init() {
   dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
 }
 
-export function open(leg) { basket = false; tag = ''; note = ''; onPlaced = null; legs = [{ lots: 1, ...leg }]; show(); }
+export function open(leg) { basket = false; tag = ''; note = ''; plan = ''; onPlaced = null; legs = [{ lots: 1, ...leg }]; show(); }
 // done(result) runs after the basket is placed (the strategy builder clears itself then).
-export function openBasket(ls, t = 'Strategy', done = null) { basket = true; tag = t; note = ''; onPlaced = done; legs = ls.map((l) => ({ ...l })); show(); }
+export function openBasket(ls, t = 'Strategy', done = null) { basket = true; tag = t; note = ''; plan = ''; onPlaced = done; legs = ls.map((l) => ({ ...l })); show(); }
 
 const lotsText = (n, lot) => `${n} lot${n > 1 ? 's' : ''} = ${(n * lot).toLocaleString('en-IN')} units`;
 const actionText = (L) => `${L.side === 'BUY' ? 'Buy' : 'Sell'} ${L.lots} lot${L.lots > 1 ? 's' : ''}`;
 
 function show() {
+  latestPreviewOk = false;
   render();
   if (!dlg.open) dlg.showModal();
   preview();
@@ -55,9 +56,12 @@ function render() {
   } else {
     body.append(el('div', { class: 'note', text: `${legs.length} legs, placed together at the live quotes.` }));
   }
-  // Replay keeps a trade journal: ask for the reason before the order goes in.
-  if (S.meta.replay) body.append(el('label', { class: 'f', for: 'tkNote' }, 'Why are you taking this trade? (goes in your journal)',
-    el('textarea', { class: 'inp note-in', id: 'tkNote', rows: '2', maxlength: '1000', placeholder: 'e.g. NIFTY held 24,000 twice this week, so I expect a move up before expiry. I will exit if it closes below 23,900.', oninput: (e) => { note = e.target.value; } }, note)));
+  body.append(el('label', { class: 'f', for: 'tkNote' }, 'Journal entry (required)',
+    el('textarea', { class: 'inp note-in', id: 'tkNote', rows: '2', minlength: '1', maxlength: '1000', 'aria-required': 'true', placeholder: S.meta.replay ? 'What do you expect the index or volatility to do?' : 'Why are you taking this trade? What are you practising?', oninput: (e) => { note = e.target.value; syncPlaceButton(); } }, note),
+    el('span', { class: 'note', text: 'Enter at least one non-space character. Your entry is saved with the order.' }));
+  if (S.meta.replay) body.append(
+    el('label', { class: 'f', for: 'tkPlan' }, 'What would prove your idea wrong? (exit plan)',
+      el('textarea', { class: 'inp note-in', id: 'tkPlan', rows: '2', maxlength: '1000', placeholder: 'Set a price, time, or event that would make you close the trade.', oninput: (e) => { plan = e.target.value; } }, plan)));
   if (S.quotes?.market && !S.quotes.market.open) body.append(el('div', { class: 'warnbox', text: 'The market is closed. Paper orders fill at the last quotes NSE published, which may be stale.' }));
   body.append(el('div', { id: 'tkPv' }, el('p', { class: 'note', text: 'Getting live quotes…' })));
   const placeBtn = el('button', { class: 'btn ' + (basket ? '' : L.side === 'BUY' ? 'buy' : 'sell'), type: 'button', id: 'tkPlace', text: basket ? `Place all ${legs.length} legs` : actionText(L), disabled: true, onclick: place });
@@ -69,6 +73,7 @@ function render() {
 
 function preview() {
   clearTimeout(pvTimer);
+  latestPreviewOk = false; syncPlaceButton();
   pvTimer = setTimeout(async () => {
     const my = ++seq; const box = $('#tkPv'); if (!box) return;
     try {
@@ -103,19 +108,25 @@ function preview() {
       }
       if (!pv.ok) out.push(el('div', { class: 'errbox', text: 'Not enough free funds for this order.' }));
       box.replaceChildren(...out);
-      const btn = $('#tkPlace'); if (btn) btn.disabled = !pv.ok || placing;
+      latestPreviewOk = Boolean(pv.ok); syncPlaceButton();
     } catch (e) {
       if (my !== seq) return;
       box.replaceChildren(el('div', { class: 'errbox', text: e.message }));
-      const btn = $('#tkPlace'); if (btn) btn.disabled = true;
+      latestPreviewOk = false; syncPlaceButton();
     }
   }, 200);
 }
 
+function syncPlaceButton() {
+  const btn = $('#tkPlace'); if (btn) btn.disabled = placing || !latestPreviewOk || !note.trim();
+}
+
 async function place() {
-  if (placing) return; placing = true; const btn = $('#tkPlace'); btn.disabled = true; btn.textContent = 'Placing…';
+  if (placing) return;
+  if (!note.trim()) { toast('Write at least one character in your journal entry before placing the trade.', 'err'); $('#tkNote')?.focus(); return; }
+  placing = true; const btn = $('#tkPlace'); btn.disabled = true; btn.textContent = 'Placing…';
   try {
-    const r = await api('/api/order', { legs, tag: basket ? tag : '', note });
+    const r = await api('/api/order', { legs, tag: basket ? tag : '', note, plan });
     S.account = r.account; emit('account', r.account);
     const f = r.fills[0];
     toast(basket ? `Placed ${legs.length} legs. Net ${r.netPremium >= 0 ? 'credit' : 'debit'} ${rs(Math.abs(r.netPremium))}, charges ${rs(r.charges)}.` : `${f.side === 'BUY' ? 'Bought' : 'Sold'} ${f.lots} lot${f.lots > 1 ? 's' : ''} (${f.qty.toLocaleString('en-IN')} units) of ${instrument(f)} at ₹${inr2.format(f.price)}.`, 'ok');

@@ -4,13 +4,13 @@ import { bs, npdf, yearsTo } from './bs.js';
 
 // leg: { type, strike, expiry, qty (signed units), entry, iv (decimal) }
 // Value of the whole position at index level x, `days` from now, or at the first expiry when atExpiry.
-export function pnlAt(legs, x, { days = 0, atExpiry = false, r = 0.06, spot } = {}) {
+export function pnlAt(legs, x, { days = 0, atExpiry = false, r = 0.06, spot, ivShiftPct = 0 } = {}) {
   const first = Math.min(...legs.map((l) => yearsTo(l.expiry)));
   const shift = atExpiry ? first : Math.min(days / 365, first);
   let p = 0;
   for (const l of legs) {
     const T = Math.max(yearsTo(l.expiry) - shift, 0);
-    let v = bs(l.type, x, l.strike, T, r, l.iv).price;
+    let v = bs(l.type, x, l.strike, T, r, Math.max(0.01, l.iv + ivShiftPct / 100)).price;
     // Keep today's curve anchored to the market price: carry the gap between market and model, shrinking with time.
     if (spot && l.adj) { const T0 = yearsTo(l.expiry); v += T0 > 0 ? l.adj * (T / T0) : 0; }
     p += l.qty * (v - l.entry);
@@ -46,15 +46,15 @@ const NS = 'http://www.w3.org/2000/svg';
 const mk = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
 
 // Draws expiry (green/red) and "now" (dashed) curves with the expected-move band. Returns nothing.
-export function drawPayoff(box, legs, { spot, iv, days = 0, r = 0.06, nowLabel = 'Today', tipBox }) {
+export function drawPayoff(box, legs, { spot, iv, days = 0, r = 0.06, nowLabel = 'Today', tipBox, ivShiftPct = 0 }) {
   const W = Math.max(320, box.clientWidth || 800), H = Math.round(Math.min(380, Math.max(240, W * 0.4)));
   const svg = mk('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Profit and loss by index level' });
   if (!legs.length) { svg.append(mk('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', fill: 'var(--muted)' }, 'Add a leg to see the payoff')); box.replaceChildren(svg); return; }
-  const T = Math.min(...legs.map((l) => yearsTo(l.expiry))); const mv = spot * iv * Math.sqrt(Math.max(T, 1 / 365));
+  const T = Math.min(...legs.map((l) => yearsTo(l.expiry))); const scenarioIv = Math.max(0.01, iv + ivShiftPct / 100); const mv = spot * scenarioIv * Math.sqrt(Math.max(T, 1 / 365));
   const ks = legs.map((l) => l.strike);
   const lo = Math.min(spot - 2.6 * mv, ...ks.map((k) => k - spot * 0.006), spot * 0.985), hi = Math.max(spot + 2.6 * mv, ...ks.map((k) => k + spot * 0.006), spot * 1.015);
   const N = 240, xs = Array.from({ length: N }, (_, i) => lo + (hi - lo) * i / (N - 1));
-  const yE = xs.map((x) => pnlAt(legs, x, { atExpiry: true, r })), yN = xs.map((x) => pnlAt(legs, x, { days, r, spot }));
+  const yE = xs.map((x) => pnlAt(legs, x, { atExpiry: true, r })), yN = xs.map((x) => pnlAt(legs, x, { days, r, spot, ivShiftPct }));
   let ymin = Math.min(0, ...yE, ...yN), ymax = Math.max(0, ...yE, ...yN); const pad = (ymax - ymin) * 0.08 || 1000; ymin -= pad; ymax += pad;
   const fmtY = (v) => { const a = Math.abs(v); return (v < 0 ? '−' : '') + '₹' + (a >= 1e5 ? (a / 1e5).toFixed(a >= 1e6 ? 0 : 1) + 'L' : a >= 1e3 ? Math.round(a / 1e3) + 'k' : Math.round(a)); };
   const yt = niceTicks(ymin, ymax, 5);
@@ -80,7 +80,7 @@ export function drawPayoff(box, legs, { spot, iv, days = 0, r = 0.06, nowLabel =
   const tip = tipBox || el('div', { class: 'tip' }); if (!tipBox) box.append(tip);
   hit.addEventListener('mousemove', (ev) => {
     const rc = svg.getBoundingClientRect(); const sx = (ev.clientX - rc.left) * W / rc.width; const x = lo + (sx - m.l) / (W - m.l - m.r) * (hi - lo);
-    const e = pnlAt(legs, x, { atExpiry: true, r }), n = pnlAt(legs, x, { days, r, spot });
+    const e = pnlAt(legs, x, { atExpiry: true, r }), n = pnlAt(legs, x, { days, r, spot, ivShiftPct });
     for (const [k, v] of [['x1', X(x)], ['x2', X(x)]]) rule.setAttribute(k, v); rule.setAttribute('opacity', 1);
     d1.setAttribute('cx', X(x)); d1.setAttribute('cy', Y(e)); d1.setAttribute('opacity', 1); d2.setAttribute('cx', X(x)); d2.setAttribute('cy', Y(n)); d2.setAttribute('opacity', 1);
     tip.replaceChildren(el('div', { class: 'muted', text: `Index ${inr0.format(x)} (${x >= spot ? '+' : '−'}${Math.abs((x / spot - 1) * 100).toFixed(2)}%)` }), el('div', { class: e >= 0 ? 'up' : 'down', text: `At expiry ${srs(e)}` }), el('div', { text: `${nowLabel} ${srs(n)}` }));

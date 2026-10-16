@@ -31,7 +31,7 @@ const PRESETS = [
 ];
 const PRESET = Object.fromEntries(PRESETS.flatMap(([, list]) => list.map(([k, n, legs, blurb]) => [k, { name: n, legs, blurb }])));
 
-let root, legs = store.get('strategyLegs', []), preset = store.get('strategyPreset', 'bull_call'), days = 0, margin = null, chains = {}, structureKey = '', placed = null;
+let root, legs = store.get('strategyLegs', []), preset = store.get('strategyPreset', 'bull_call'), days = 0, ivShift = 0, margin = null, chains = {}, structureKey = '', placed = null;
 
 export function init(sec) {
   root = sec;
@@ -52,10 +52,11 @@ export function init(sec) {
       el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'Profit and loss by index level' }), el('span', { class: 'sp' }), el('span', { class: 'note', id: 'stExp' })),
         payoffLegend('Before expiry'), el('div', { class: 'svgchart', id: 'stChart', style: { marginTop: '8px' } }),
         el('div', { style: { display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }, id: 'stSlider' },
-          el('label', { class: 'note', for: 'stDays', text: 'Show the dashed curve after' }), el('input', { type: 'range', id: 'stDays', min: '0', max: '0', value: '0', style: { flex: '1 1 200px' }, oninput: (e) => { days = +e.target.value; renderCalc(); } }), el('span', { class: 'mono', id: 'stDaysOut', text: 'today' }))),
+          el('label', { class: 'note', for: 'stDays', text: 'Show the dashed curve after' }), el('input', { type: 'range', id: 'stDays', min: '0', max: '0', value: '0', style: { flex: '1 1 160px' }, oninput: (e) => { days = +e.target.value; renderCalc(); } }), el('span', { class: 'mono', id: 'stDaysOut', text: 'today' }),
+          el('label', { class: 'note', for: 'stIv', text: 'What if IV changes?' }), el('input', { type: 'range', id: 'stIv', min: '-10', max: '10', step: '1', value: '0', style: { flex: '1 1 120px' }, oninput: (e) => { ivShift = +e.target.value; renderCalc(); } }), el('span', { class: 'mono', id: 'stIvOut', text: 'unchanged' }))),
       el('div', { class: 'panel' }, el('h2', { text: 'The numbers', style: { marginBottom: '10px' } }), el('div', { class: 'grid', id: 'stMetrics', style: { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' } }))),
     el('div', { class: 'cols' },
-      el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'What if the index moves?' }), el('span', { class: 'note', text: 'Rupee P&L for the whole position, with implied volatility unchanged.' })), el('div', { class: 'tw' }, el('table', { class: 'heat', id: 'stHeat' }))),
+      el('div', { class: 'panel' }, el('div', { class: 'panel-h' }, el('h2', { text: 'What if the index moves?' }), el('span', { class: 'note', id: 'stHeatNote', text: 'Rupee P&L for the whole position, with implied volatility unchanged.' })), el('p', { class: 'note', text: 'The IV slider shifts every leg by the same amount. IV moves option prices before expiry; at expiry, only the index level determines the payoff. A 5-point IV rise means 15% to 20%.' }), el('div', { class: 'tw' }, el('table', { class: 'heat', id: 'stHeat' }))),
       el('div', { class: 'panel' }, el('h2', { text: 'How it reacts (Greeks)', style: { marginBottom: '10px' } }), el('div', { class: 'grid', id: 'stGreeks', style: { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' } }))),
   );
   on('addLeg', (l) => {
@@ -204,9 +205,12 @@ function renderCalc() {
   if (!m) { drawPayoff(chart, [], {}); $('#stExp').textContent = ''; $('#stSlider').hidden = true; $('#stMetrics').replaceChildren(); $('#stGreeks').replaceChildren(); $('#stHeat').replaceChildren(); return; }
   const firstExp = legs.map((l) => l.expiry).sort()[0]; const dleft = Math.max(0, Math.floor(yearsTo(firstExp) * 365));
   const sl = $('#stDays'); sl.max = String(dleft); if (days > dleft) days = dleft; sl.value = String(days); $('#stSlider').hidden = dleft < 1;
+  const ivSlider = $('#stIv'), minIvShift = Math.max(-10, Math.ceil(1 - Math.min(...m.pl.map((l) => l.iv * 100))));
+  ivSlider.min = String(minIvShift); if (ivShift < minIvShift) ivShift = minIvShift; ivSlider.value = String(ivShift);
   $('#stDaysOut').textContent = days ? `${days} day${days > 1 ? 's' : ''}` : 'today';
   $('#stExp').textContent = `Expiry ${fmtExpiry(firstExp)} · ${fmtLeft(firstExp)}`;
-  drawPayoff(chart, m.pl, { spot: m.spot, iv: m.atmIv, days, r: m.r, nowLabel: days ? `In ${days} day${days > 1 ? 's' : ''}` : 'Today' });
+  drawPayoff(chart, m.pl, { spot: m.spot, iv: m.atmIv, days, r: m.r, ivShiftPct: ivShift, nowLabel: days ? `In ${days} day${days > 1 ? 's' : ''}` : 'Today' });
+  $('#stIvOut').textContent = ivShift === 0 ? 'unchanged' : `${ivShift > 0 ? '+' : '−'}${Math.abs(ivShift)} vol pts`;
   const a = analyze(m.pl, m.spot, m.atmIv, m.r);
   const net = m.pl.reduce((s, l) => s - l.qty * l.entry, 0);
   const stat = (k, v, cls, s) => el('div', { class: 'stat' }, el('div', { class: 'k' }, term(k)), el('div', { class: 'v ' + (cls || ''), text: v }), s ? el('div', { class: 's', text: s }) : null);
@@ -214,7 +218,7 @@ function renderCalc() {
   const mg = margin && !margin.error ? Math.max(0, margin.marginAfter - margin.marginBefore) : null;
   $('#stMetrics').replaceChildren(
     stat(net >= 0 ? 'Credit received' : 'Cost to enter', rs(Math.abs(net)), net >= 0 ? 'up' : '', net >= 0 ? 'Paid to you upfront' : 'You pay this upfront'),
-    stat('Chance of profit', `${Math.round(a.pop * 100)}%`, '', 'At expiry, using today\'s implied volatility'),
+    stat('Chance of profit', `${Math.round(a.pop * 100)}%`, '', 'Base case at expiry using today\'s IV; the IV slider changes scenarios only, not this estimate'),
     stat('Max profit', a.maxP === Infinity ? 'Unlimited' : rs(a.maxP), 'up'),
     stat('Max loss', a.maxL === -Infinity ? 'Unlimited' : rs(a.maxL), 'down', a.maxL === -Infinity ? 'Needs a hard stop-loss' : ''),
     stat('Breakeven', a.be.length ? a.be.map((b) => pts(b)).join(' / ') : '—', '', 'Index level where the expiry line crosses zero'),
@@ -224,7 +228,7 @@ function renderCalc() {
   );
   const g = greeks(m.pl, m.spot, m.r);
   $('#stGreeks').replaceChildren(
-    stat('Delta', srs(g.delta), g.delta >= 0 ? 'up' : 'down', 'Gain for each 1-point rise in the index'),
+    stat('Delta', srs(g.delta), g.delta >= 0 ? 'up' : 'down', 'Current IV; gain for each 1-point rise in the index'),
     stat('Theta', `${srs(g.theta)} / day`, g.theta >= 0 ? 'up' : 'down', g.theta >= 0 ? 'Time is on your side' : 'Time costs you this each day'),
     stat('Vega', srs(g.vega), g.vega >= 0 ? 'up' : 'down', 'Gain if implied volatility rises 1 point'),
     stat('Gamma', g.gamma.toFixed(3), '', 'How quickly delta changes as the index moves'),
@@ -232,7 +236,8 @@ function renderCalc() {
   const moves = [-3, -2, -1, -0.5, 0, 0.5, 1, 2, 3];
   const mid = Math.floor(dleft / 2);
   const cols = dleft < 1 ? [['Now', { days: 0 }], ['At expiry', { atExpiry: true }]] : [['Now', { days: 0 }], [`In ${mid} day${mid === 1 ? '' : 's'}`, { days: mid }], ['At expiry', { atExpiry: true }]];
-  const vals = moves.map((mv) => cols.map(([, o]) => pnlAt(m.pl, m.spot * (1 + mv / 100), { ...o, r: m.r, spot: m.spot })));
+  const vals = moves.map((mv) => cols.map(([, o]) => pnlAt(m.pl, m.spot * (1 + mv / 100), { ...o, r: m.r, spot: m.spot, ivShiftPct: ivShift })));
+  $('#stHeatNote').textContent = `Rupee P&L for the whole position; ${ivShift === 0 ? 'IV unchanged' : `IV ${ivShift > 0 ? 'up' : 'down'} ${Math.abs(ivShift)} percentage points`} through the selected time.`;
   const big = Math.max(1, ...vals.flat().map(Math.abs));
   $('#stHeat').replaceChildren(el('thead', {}, el('tr', {}, el('th', { class: 'l', text: 'Index move' }), cols.map(([h]) => el('th', { style: { textAlign: 'center' }, text: h })))),
     el('tbody', {}, moves.map((mv, i) => el('tr', {}, el('td', { class: 'l', text: `${mv > 0 ? '+' : ''}${mv}% (${pts(m.spot * (1 + mv / 100))})` }),
