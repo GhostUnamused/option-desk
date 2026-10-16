@@ -44,9 +44,7 @@ function renderBar() {
     return;
   }
   const dayLabel = (r.blind ? `Day ${r.day} · ${fmtDay(r.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' })}` : fmtDay(r.date)) + (r.intraday ? ` · ${r.running ? r.time : 'closed'}` : '');
-  const nx = r.nextExpiry?.[S.symbol];
-  const dleft = nx ? Math.round(daysTo(nx.date)) : 0;
-  const exp = nx ? `${S.meta.indices[S.symbol]?.short || S.symbol} ${nx.kind} expiry ${nx.date === r.date ? 'today, at 15:30' : `${r.blind ? '' : fmtExpiry(nx.date) + ', '}in ${dleft} day${dleft === 1 ? '' : 's'}`}` : '';
+  const exp = expirySummary(r);
   const btn = (text, title, fn, can = r.hasNext) => el('button', { type: 'button', text, title, disabled: stepping || playing || !can, onclick: fn });
   const minuteMode = r.intraday && r.running;
   const playTitle = minuteMode && playBy !== 'day' ? `Move forward ${playBy === 'min5' ? 'five minutes' : 'one minute'} at a time until you press Pause, then on to the next day. Pauses while an order ticket is open.` : 'Move forward one trading day at a time until you press Pause. Pauses while an order ticket is open.';
@@ -60,7 +58,7 @@ function renderBar() {
   bar.replaceChildren(
     el('span', { class: 'pill warn', text: r.blind ? 'Blind replay' : 'Replay' }),
     el('b', { class: 'rp-date', text: dayLabel, title: r.blind ? 'Blind mode: the real date is hidden until you end the session.' : minuteMode ? `Prices are the last trades before ${r.time} IST on this day.` : 'Prices are this day\'s closing prices.' }),
-    el('span', { class: 'note', text: tip || (r.blind ? `${exp}` : `Day ${r.day} of your session${exp ? ' · ' + exp : ''}`) }),
+    el('span', { class: 'note rp-expiries', title: exp, text: tip || (r.blind ? exp : `Day ${r.day} of your session${exp ? ' · ' + exp : ''}`) }),
     el('span', { class: 'sp' }),
     minuteMode ? el('div', { class: 'transport', role: 'group', 'aria-label': 'Move forward within the day' },
       btn('+1 min', 'One minute ahead (shortcut: M)', () => step('minutes', false, 1), true),
@@ -111,6 +109,20 @@ function updateBarDate() {
   if (!label || !r?.active) return;
   label.textContent = (r.blind ? `Day ${r.day} · ${fmtDay(r.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' })}` : fmtDay(r.date)) + (r.intraday ? ` · ${r.running ? r.time : 'closed'}` : '');
   label.title = r.blind ? 'Blind mode: the real date is hidden until you end the session.' : r.running ? `Prices are the last trades before ${r.time} IST on this day.` : 'Prices are this day\'s closing prices.';
+  const exp = expirySummary(r), detail = bar.querySelector('.rp-expiries');
+  if (detail) { detail.title = exp; detail.textContent = r.blind ? exp : `Day ${r.day} of your session${exp ? ' · ' + exp : ''}`; }
+}
+
+function expirySummary(r) {
+  const list = r.availableExpiries?.[S.symbol] || (r.nextExpiry?.[S.symbol] ? [r.nextExpiry[S.symbol]] : []);
+  if (!list.length) return '';
+  const short = S.meta.indices[S.symbol]?.short || S.symbol;
+  const labels = list.map(({ date, kind }) => {
+    const days = Math.max(0, Math.round(daysTo(date)));
+    const when = date === r.date ? 'today' : r.blind ? `in ${days} day${days === 1 ? '' : 's'}` : fmtExpiry(date);
+    return `${when} ${kind}`;
+  });
+  return `${short} ${list.length === 1 ? 'expiry' : 'expiries'}: ${labels.join(', ')}`;
 }
 
 async function togglePlay() {
