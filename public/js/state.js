@@ -34,7 +34,10 @@ export function analysisExpiry(symbol = S.symbol) {
 export async function loadChain(symbol, expiry, force = false) {
   const k = `${symbol}|${expiry}`;
   const hit = S.chains.get(k);
-  if (hit && !force && Date.now() - hit._at < 4000) return hit;
+  // Keep the displayed chain close to the quote stream. INDstocks has its own short cache;
+  // the longer client cache used to make each visible refresh wait at least four seconds.
+  const ttl = S.meta?.broker?.connected ? 2000 : 4000;
+  if (hit && !force && Date.now() - hit._at < ttl) return hit;
   const c = await api(`/api/chain?symbol=${symbol}&expiry=${expiry}`);
   c._at = Date.now();
   S.chains.set(k, c);

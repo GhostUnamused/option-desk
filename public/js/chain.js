@@ -41,16 +41,35 @@ export function init(sec) {
   on('symbol', () => { centerNext = true; if (S.tab === 'chain') { fillSelects(); refresh(true); } });
   on('universe', () => { if (S.tab === 'chain') fillSelects(); });
   on('expiries', () => { if (S.tab === 'chain') { fillSelects(); refresh(true); } });
-  // Streamed prices: move the price cells in place (keeps the hover Buy/Sell buttons), with a brief flash.
-  on('ticks', ({ options }) => {
+  // Streamed prices and quotes update cells in place (keeps the hover Buy/Sell buttons), with a brief price flash.
+  on('ticks', ({ options, quotes = {} }) => {
     if (S.tab !== 'chain' || !chainData) return;
+    const maxLiveOi = Math.max(1, ...chainData.rows.flatMap((r) => [r.ce?.oi || 0, r.pe?.oi || 0]));
     for (const r of chainData.rows) for (const o of [r.ce, r.pe]) {
       if (!o || !options.has(o.id)) continue;
-      const cell = tbody.querySelector(`td[data-id="${o.id}"]`); if (!cell) continue;
+      const cell = tbody.querySelector(`td.ltp[data-id="${o.id}"]`); if (!cell) continue;
       const [p, ch] = cell.children, old = p.textContent, now = inr2.format(o.ltp);
-      if (old === now) continue;
-      p.textContent = now; ch.textContent = pct(o.pchg || 0, 1); ch.className = 'chg ' + tone(o.chg);
-      cell.classList.remove('tick-up', 'tick-down'); void cell.offsetWidth; cell.classList.add(o.ltp > parseFloat(old.replace(/,/g, '')) ? 'tick-up' : 'tick-down');
+      if (old !== now) {
+        p.textContent = now; ch.textContent = pct(o.pchg || 0, 1); ch.className = 'chg ' + tone(o.chg);
+        cell.classList.remove('tick-up', 'tick-down'); void cell.offsetWidth; cell.classList.add(o.ltp > parseFloat(old.replace(/,/g, '')) ? 'tick-up' : 'tick-down');
+      }
+      const update = (field, text, cls) => {
+        const td = tbody.querySelector(`td[data-id="${o.id}"][data-field="${field}"]`); if (!td) return;
+        if (field === 'oi') {
+          const label = [...td.childNodes].find((n) => n.nodeType === Node.TEXT_NODE);
+          if (label) label.nodeValue = ' ' + text;
+          const bar = td.querySelector('.oibar'); if (bar) bar.style.width = `${(o.oi / maxLiveOi) * 100}%`;
+        } else td.textContent = text;
+        if (cls) td.className = `${td.classList.contains('itm') ? 'itm ' : ''}${cls}`;
+      };
+      if (quotes[o.id]) {
+        update('oi', compact.format(o.oi));
+        update('chgOi', (o.chgOi > 0 ? '+' : '') + compact.format(o.chgOi), tone(o.chgOi));
+        update('vol', compact.format(o.vol));
+        update('bid', o.bid ? inr2.format(o.bid) : '—');
+        update('ask', o.ask ? inr2.format(o.ask) : '—');
+        update('iv', o.iv > 0 ? o.iv.toFixed(1) : '—');
+      }
     }
   });
 }
@@ -103,20 +122,20 @@ function render() {
     for (const t of ['CE', 'PE']) {
       const o = t === 'CE' ? row.ce : row.pe; const itm = t === 'CE' ? row.strike < spot : row.strike > spot;
       const cells = [];
-      const td = (txt, cls = '') => el('td', { class: (itm ? 'itm ' : '') + cls, text: txt });
+      const td = (txt, cls = '', field = '') => el('td', { class: (itm ? 'itm ' : '') + cls, 'data-id': field ? o?.id || null : null, 'data-field': field || null, text: txt });
       if (!o) { for (let i = 0; i < callCols.length; i++) cells.push(td('—')); }
       else {
-        const oiTd = td(compact.format(o.oi), t === 'CE' ? 'ce-oi' : 'pe-oi'); oiTd.prepend(el('span', { class: 'oibar', style: { width: `${(o.oi / maxOi) * 100}%` } }));
+        const oiTd = td(compact.format(o.oi), t === 'CE' ? 'ce-oi' : 'pe-oi', 'oi'); oiTd.prepend(el('span', { class: 'oibar', style: { width: `${(o.oi / maxOi) * 100}%` } }));
         const iv = o.iv > 0 ? o.iv : atmIv;
         const delta = bs(t, spot, row.strike, T, r, iv / 100).delta;
         const ltp = el('td', { 'data-id': o.id || null, class: (itm ? 'itm ' : '') + `ltp act ${t === 'CE' ? 'ce-ltp' : 'pe-ltp'}` + (o.traded === false ? ' notraded' : ''), title: o.traded === false ? 'No trades in this option on this day, so it cannot be bought or sold in replay. The price shown is NSE\'s settlement estimate.' : 'Click for chart and Greeks', onclick: (e) => { if (!e.target.closest('.bs')) drawer.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t }); } },
           el('span', { text: inr2.format(o.ltp) }), el('span', { class: 'chg ' + tone(o.chg), text: pct(o.pchg || (o.ltp - o.chg ? (o.chg / (o.ltp - o.chg)) * 100 : 0), 1) }),
           el('span', { class: 'bs' }, el('button', { class: 'b', type: 'button', title: 'Buy', text: 'B', onclick: () => ticket.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t, side: 'BUY' }) }), el('button', { class: 's', type: 'button', title: 'Sell', text: 'S', onclick: () => ticket.open({ symbol: c.symbol, expiry: c.expiry, strike: row.strike, type: t, side: 'SELL' }) })));
         cells.push(oiTd);
-        if (full) cells.push(td((o.chgOi > 0 ? '+' : '') + compact.format(o.chgOi), tone(o.chgOi)), td(compact.format(o.vol)));
-        cells.push(td(o.iv > 0 ? o.iv.toFixed(1) : '—'));
+        if (full) cells.push(td((o.chgOi > 0 ? '+' : '') + compact.format(o.chgOi), tone(o.chgOi), 'chgOi'), td(compact.format(o.vol), '', 'vol'));
+        cells.push(td(o.iv > 0 ? o.iv.toFixed(1) : '—', '', 'iv'));
         if (greeks) cells.push(td((Math.abs(delta) < 0.005 ? 0 : delta).toFixed(2)));
-        if (full) cells.push(td(o.bid ? inr2.format(o.bid) : '—'), td(o.ask ? inr2.format(o.ask) : '—'));
+        if (full) cells.push(td(o.bid ? inr2.format(o.bid) : '—', '', 'bid'), td(o.ask ? inr2.format(o.ask) : '—', '', 'ask'));
         cells.push(ltp);
       }
       if (t === 'CE') { tr.append(...cells, el('td', { class: 'k', text: inr0.format(row.strike) })); }

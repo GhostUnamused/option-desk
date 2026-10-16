@@ -87,13 +87,30 @@ async function step(by, quiet = false, n = 1) {
     else if (!quiet && (by === 'minutes' || by === 'close') && !R().running) toast('The market has closed for the day (15:30). Step to the next day when you are ready.');
     return true;
   } catch (e) { toast(e.message, 'err'); return false; }
-  finally { stepping = false; renderBar(); }
+  finally {
+    stepping = false;
+    // Auto-play advances frequently. Keep the existing controls in place so an
+    // open native select (speed or step size) is not dismissed on every step.
+    if (playing) updateBarDate(); else renderBar();
+  }
 }
 
-// Reload the replay state, lot sizes and clock, then let every tab redraw on the new day.
+// Reload the replay state and clock. A minute step is not a new day: let the
+// app refresh prices/account marks without clearing caches or rebuilding tabs.
 async function afterDay() {
+  const previousDate = R()?.date;
   S.meta = await api('/api/meta');
-  applyClock(); newDay(); renderBar();
+  applyClock();
+  if (R()?.date !== previousDate) newDay();
+  else emit('replayTick');
+}
+
+function updateBarDate() {
+  const r = R();
+  const label = bar.querySelector('.rp-date');
+  if (!label || !r?.active) return;
+  label.textContent = (r.blind ? `Day ${r.day} · ${fmtDay(r.date, { day: undefined, month: undefined, year: undefined, weekday: 'long' })}` : fmtDay(r.date)) + (r.intraday ? ` · ${r.running ? r.time : 'closed'}` : '');
+  label.title = r.blind ? 'Blind mode: the real date is hidden until you end the session.' : r.running ? `Prices are the last trades before ${r.time} IST on this day.` : 'Prices are this day\'s closing prices.';
 }
 
 async function togglePlay() {

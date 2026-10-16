@@ -67,6 +67,14 @@ export function init(sec) {
     preset = 'custom'; save(); if (S.tab === 'strategy') renderAll();
   });
   on('symbol', () => { if (S.tab === 'strategy') renderAll(); });
+  on('ticks', ({ options }) => {
+    if (S.tab !== 'strategy' || !legs.some((l) => {
+      const c = chains[`${l.symbol}|${l.expiry}`] || S.chains.get(`${l.symbol}|${l.expiry}`);
+      const r = c?.rows.find((x) => x.strike === l.strike); const o = r && (l.type === 'CE' ? r.ce : r.pe);
+      return o && options.has(o.id);
+    })) return;
+    renderPrices(); renderCalc();
+  });
   window.addEventListener('resize', () => { if (S.tab === 'strategy') renderCalc(); });
 }
 

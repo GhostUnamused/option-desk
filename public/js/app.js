@@ -296,7 +296,13 @@ async function boot() {
   every(5000, pollQuotes);
   if (!S.meta.replay) setInterval(() => { if (!document.hidden) renderSession(); }, 1000);
   addEventListener('resize', moveInk); document.fonts?.ready.then(moveInk);
-  every(5000, () => TABS[S.tab].tick?.());
+  // A connected INDstocks stream updates prices immediately; refresh the active view every
+  // two seconds as well so OI, bid/ask, account marks and other REST-backed fields catch up.
+  // The connection may be added after boot, so check its current status each time.
+  let fastTicks = 0;
+  every(2000, () => {
+    if (S.meta.broker?.connected || ++fastTicks % 3 === 0) return TABS[S.tab].tick?.();
+  });
   every(8000, () => (S.tab !== 'positions' && !replayIdle() ? refreshAccount() : null));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollQuotes(); TABS[S.tab].tick?.(); } });
 }
@@ -312,7 +318,12 @@ function initReplay() {
     await loadExpiries().catch(() => {});
     emit('expiries');
     await refreshAccount().catch(() => {});
-    TABS[S.tab].show?.();
+  });
+  // Minute-by-minute replay updates prices and account marks without a day
+  // transition. Keep the active tab's DOM intact so its open controls stay open.
+  on('replayTick', async () => {
+    await pollQuotes();
+    await refreshAccount().catch(() => {});
   });
 }
 

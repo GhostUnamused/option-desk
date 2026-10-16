@@ -20,6 +20,7 @@ export function init() {
 export function update(s) {
   if (!s || !dlg) return;
   st = s;
+  S.meta.broker = s;
   const pill = $('#srcPill');
   const via = s.answering === 'INDstocks' ? 'INDstocks' : 'NSE website';
   pill.className = 'pill ' + (s.expired ? 'bad' : s.answering === 'INDstocks' ? 'ok' : s.hasToken ? 'warn' : '');

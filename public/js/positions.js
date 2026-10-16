@@ -94,7 +94,11 @@ function renderPayoff() {
   const groups = [...new Set(a.positions.map((p) => `${p.symbol}|${p.expiry}`))];
   panel.hidden = !groups.length; if (!groups.length) return;
   if (!groups.includes(group)) group = groups[0];
-  const sel = $('#acGroup'); sel.replaceChildren(...groups.map((g) => { const [s, e] = g.split('|'); return new Option(`${cfg(s).short} · ${e.slice(8)}/${e.slice(5, 7)}`, g, false, g === group); }));
+  const sel = $('#acGroup');
+  const existing = [...sel.options].map((o) => o.value);
+  if (groups.length !== existing.length || groups.some((g, i) => g !== existing[i])) {
+    sel.replaceChildren(...groups.map((g) => { const [s, e] = g.split('|'); return new Option(`${cfg(s).short} · ${e.slice(8)}/${e.slice(5, 7)}`, g, false, g === group); }));
+  }
   sel.hidden = groups.length < 2;
   const [sym] = group.split('|'); const spot = a.spots[sym]; const r = S.meta.riskFree;
   const ps = a.positions.filter((p) => `${p.symbol}|${p.expiry}` === group);
