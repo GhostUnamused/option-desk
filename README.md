@@ -53,9 +53,9 @@ The replay balance (`replay.json`) is separate from the live paper account. Ever
 
 ## Where the prices come from
 
-The same public JSON endpoints nseindia.com uses in your browser. They are unofficial, so NSE can rate-limit or change them. Prices refresh every few seconds: close to live, not tick-by-tick.
+By default, prices come from the same public JSON endpoints nseindia.com uses in your browser. They are unofficial, so NSE can rate-limit or change them. Prices refresh every few seconds: close to live, not tick-by-tick.
 
-To plug in a broker's live feed later (Upstox, Zerodha Kite, Dhan), add a provider in `lib/` with the same methods as `lib/nse.js` and switch to it in `server.js`.
+You can connect one provider for live market data from the Data button: INDstocks, FYERS, Upstox, Kotak Neo, ICICI Breeze or Angel One. The app uses your own credentials, stored locally and encrypted with your Windows account, and requests market data only. Kotak Neo uses one consumer key for quotes, option chains and active-contract candles; its index charts continue to use NSE's public endpoints. FYERS and Upstox access tokens expire daily. Breeze uses an App Key, Secret Key and daily API session; Angel One uses a SmartAPI key, client code, PIN and daily TOTP login. Provider coverage differs: BSE and stock options, expired options, streaming, and historical candle windows depend on the provider. Replay's minute-history downloader still uses INDstocks, while the daily NSE archive replay works without a broker connection.
 
 ## Settings
 
@@ -87,6 +87,6 @@ test/               unit tests (npm test)
 
 Optionwise is **source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may read the code, run it, learn from it and change it for personal study, research, hobby and other noncommercial use. You may not sell it, bundle it into a paid product, or offer it as a paid or commercial service without the author's written permission. Charts use TradingView Lightweight Charts (Apache 2.0); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Your INDstocks token, if you add one, is saved encrypted on your own computer and is used only to talk to INDstocks. Optionwise is an independent project and is not affiliated with or endorsed by NSE, INDstocks (INDmoney) or TradingView. Market data belongs to its owners and is subject to their terms. The software is provided as is, with no warranty.
+Broker credentials, if you add them, are saved encrypted on your own computer and are used only to request market data from that broker. Optionwise is an independent project and is not affiliated with or endorsed by NSE, INDstocks (INDmoney), FYERS, Upstox, Kotak Neo, ICICI Direct, Angel One or TradingView. Market data belongs to its owners and is subject to their terms. The software is provided as is, with no warranty.
 
 This is a learning and practice tool. It is not investment advice.

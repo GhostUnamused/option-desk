@@ -1,5 +1,5 @@
 // Expired options: pick a past expiry, strike and call/put, and see how that contract traded, minute by minute on its
-// last day or over its last weeks. History comes from INDstocks (expired contracts from about April 2025 on).
+// last day or over its last weeks. This panel appears only for providers that implement its expired-contract APIs.
 import { api, el, $, fmtExpiryLong, store } from './util.js';
 import { S, on } from './state.js';
 import { candleChart } from './candles.js';
@@ -11,7 +11,7 @@ let box, cc = null, state = { symbol: null, expiry: null, contracts: [], strike:
 export function panel() {
   box = el('div', { class: 'panel', id: 'expPanel' },
     el('div', { class: 'panel-h' }, el('h2', { text: 'Expired options' }), el('span', { class: 'note', text: 'Replay how a contract that has already expired actually traded.' })),
-    el('div', { id: 'expBody' }, el('p', { class: 'note', text: 'Open this tab with INDstocks connected to load past contracts.' })));
+    el('div', { id: 'expBody' }, el('p', { class: 'note', text: 'Connect a provider that includes expired option history to load past contracts.' })));
   on('symbol', () => { if (S.tab === 'chain' && box.dataset.ready) load(); });
   return box;
 }
@@ -20,8 +20,12 @@ export function panel() {
 export async function show() {
   if (S.meta.replay) { box.hidden = true; return; }
   const st = S.quotes?.broker;
+  if (!st?.capabilities?.expiredOptions) {
+    $('#expBody').replaceChildren(el('p', { class: 'note', text: 'The selected provider does not include expired option history.' }));
+    return;
+  }
   if (!st?.hasToken || st.expired) {
-    $('#expBody').replaceChildren(el('p', { class: 'note', text: 'Expired option prices come from INDstocks. Connect it with the Data button in the tab bar to use this.' }));
+    $('#expBody').replaceChildren(el('p', { class: 'note', text: 'Connect the selected data provider with the Data button in the tab bar to use this.' }));
     return;
   }
   if (state.symbol !== S.symbol) await load();
@@ -34,7 +38,7 @@ async function load() {
     const [{ expiries }, daily] = await Promise.all([api(`/api/expired/expiries?symbol=${S.symbol}`), api(`/api/daily?symbol=${S.symbol}&days=730`).catch(() => ({ rows: [] }))]);
     if (my !== seq) return;
     state.closes = new Map(daily.rows.map((r) => [r.date, r.c]));
-    if (!expiries.length) { $('#expBody').replaceChildren(el('p', { class: 'note', text: `INDstocks has no expired ${S.symbol} options yet.` })); return; }
+    if (!expiries.length) { $('#expBody').replaceChildren(el('p', { class: 'note', text: `No expired ${S.symbol} options are available from this provider.` })); return; }
     state.expiries = expiries; state.expiry = expiries[0];
     build(); await pickExpiry(state.expiry);
   } catch (e) { $('#expBody').replaceChildren(el('p', { class: 'note', text: `Could not load expired options: ${e.message}` })); }
@@ -50,6 +54,7 @@ function build() {
       el('span', { class: 'sp' }), seg(RANGES, state.range, (v) => { state.range = v; store.set('expRange', v); draw(true); })),
     el('div', { class: 'chart', id: 'expChart' }),
     el('p', { class: 'note', id: 'expNote' }),
+    S.meta.broker?.provider === 'fyers' ? el('p', { class: 'note', text: 'FYERS Standard allows 10 expired intraday-history requests per day. These charts use that allowance.' }) : null,
     el('p', { class: 'note' }, 'Tip: compare a ', term('call'), ' and a ', term('put'), ' at the same strike on expiry day to see ', term('theta'), ' take the last of their ', term('time value'), '.'));
   if (cc) cc.remove();
   cc = candleChart($('#expChart'), { height: 300 });

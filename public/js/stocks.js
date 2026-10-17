@@ -1,5 +1,5 @@
 // Stock options: search the ~200 NSE stocks that have options and follow some. A followed stock joins the symbol list
-// everywhere (header, chain, strategy, charts) like an index. Data comes from INDstocks, so this needs the connection.
+// everywhere (header, chain, strategy, charts) like an index. Only providers with stock-option support are offered here.
 import { api, el, $, toast } from './util.js';
 import { S, setSymbol, emit } from './state.js';
 
@@ -9,10 +9,10 @@ export function init() {
   dlg = $('#stocks');
   dlg?.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
 }
-export const available = () => Boolean(!S.meta.replay && S.meta.broker?.hasToken);
+export const available = () => Boolean(!S.meta.replay && S.meta.broker?.hasToken && S.meta.broker?.capabilities?.stockOptions);
 
 export function open() {
-  if (!available()) { toast('Stock options come from INDstocks. Connect it with the Data button in the tab bar first.', 'err'); return; }
+  if (!available()) { toast('Stock options are not available from the selected data provider.', 'err'); return; }
   const list = el('div', { class: 'st-list', role: 'listbox', 'aria-label': 'Stocks with options' }, el('p', { class: 'note', text: 'Loading the list of stocks with options (the first time each day takes a few seconds)…' }));
   const inp = el('input', { class: 'inp tok', type: 'search', placeholder: 'Search by name or symbol, e.g. Reliance, HDFCBANK', 'aria-label': 'Search stocks', oninput: () => search(inp.value, list) });
   dlg.replaceChildren(

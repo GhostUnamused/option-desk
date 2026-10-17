@@ -5,6 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NseProvider } from './lib/nse.js';
 import { IndstocksProvider } from './lib/indstocks.js';
+import { FyersProvider } from './lib/fyers.js';
+import { UpstoxProvider } from './lib/upstox.js';
+import { KotakProvider } from './lib/kotak.js';
+import { BreezeProvider } from './lib/breeze.js';
+import { AngelOneProvider } from './lib/angelone.js';
+import { BrokerManager } from './lib/brokers.js';
 import { loadDotEnv, SecretFile } from './lib/secrets.js';
 import { PaperAccount } from './lib/paper.js';
 import { INDICES, PAPER, RISK_FREE, REPLAY, CHARGES, addStock, removeStock } from './lib/config.js';
@@ -22,13 +28,22 @@ const PORT = Number(portArg > 0 ? process.argv[portArg + 1] : process.env.PORT) 
 // "Simulated" mode is the replay: practise on real past days, stepped forward one trading day at a time.
 const MOCK = process.env.MOCK === '1' || process.argv.includes('--sim') || process.argv.includes('--replay');
 desktop.migrateData();
-loadDotEnv(path.join(ROOT, '.env')); // source runs only: INDSTOCKS_TOKEN for the broker feed (the exe asks in the page instead)
+loadDotEnv(path.join(ROOT, '.env')); // source runs only: optional developer credentials; end users connect in the app
 let replay = null, replayError = null;
-// Replay downloads minute history from INDstocks with the same token as live mode (.env or the one saved in the app).
+// Replay's minute-history source remains independent of the selected live broker so provider changes cannot affect daily replay.
 const history = MOCK ? new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat'))) : null;
 if (MOCK) { try { replay = new ReplayEngine(desktop.DATA_DIR, { history: () => history }); } catch (e) { replayError = e.message; console.log(`  Replay unavailable: ${e.message}`); } }
-// Live prices come from INDstocks when it has a token, else from NSE's website (IndstocksProvider falls back by itself).
-const broker = MOCK ? null : new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat')), { stream: true });
+// One selected read-only broker provides live data. NSE remains the fallback; broker credentials are kept separately.
+const adapters = MOCK ? null : {
+  indstocks: new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat')), { stream: true }),
+  fyers: new FyersProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker-fyers.dat'))),
+  upstox: new UpstoxProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker-upstox.dat'))),
+  kotak: new KotakProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker-kotak.dat'))),
+  breeze: new BreezeProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker-breeze.dat'))),
+  angelone: new AngelOneProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker-angelone.dat'))),
+};
+if (adapters) adapters.indstocks.capabilities = { indexOptions: true, bseIndexOptions: true, stockOptions: true, expiredOptions: true, optionCandles: true, stream: true };
+const broker = MOCK ? null : new BrokerManager(adapters, path.join(desktop.DATA_DIR, 'broker-settings.json'));
 // Stocks the owner follows (their options join the symbol list). Kept with their lot, strike step and INDstocks id.
 const WATCH_FILE = path.join(desktop.DATA_DIR, 'watchlist.json');
 let watchlist = []; try { watchlist = JSON.parse(fs.readFileSync(WATCH_FILE, 'utf8')); } catch {}
@@ -42,14 +57,14 @@ const liveHist = MOCK ? null : new LiveOptionHistory(desktop.DATA_DIR, provider)
 const istToday = () => new Date(Date.now() + 19800e3).toISOString().slice(0, 10);
 // Headlines and event names give the real date away, so a blind session gets none.
 const BLIND_NEWS = 'News and event markers are hidden in blind mode, because headlines would give away the real date.';
-const needBroker = () => { if (!broker) throw new Error('Option history comes from INDstocks, so it works with live prices only.'); if (!broker.usable()) throw new Error('Connect INDstocks (the Data button in the tab bar) to see option history.'); return broker; };
+const needBroker = () => { if (!broker) throw new Error('Broker data is available in live mode only.'); if (!broker.usable()) throw new Error('Connect a broker with the Data button to see this market data.'); return broker; };
 const needAccount = () => { if (!account) throw new Error(replayError); return account; };
 const NOT_REPLAY = 'Replay is only available after switching to replay (node server.js --sim).';
 const needReplay = () => { if (!replay) throw new Error(replayError || NOT_REPLAY); return replay; };
 // Indices the page offers: replay has NIFTY and BANK NIFTY, with the lot size in force on the replay date.
 async function metaIndices() {
-  // Live: BSE indices and stocks only have data through INDstocks, so they are offered once a token is in.
-  if (!MOCK) return Object.fromEntries(Object.entries(INDICES).filter(([, v]) => !v.broker || broker.token));
+  // BSE indices and stocks are only offered by brokers whose adapter supports them.
+  if (!MOCK) return Object.fromEntries(Object.entries(INDICES).filter(([, v]) => !v.broker || (broker.token && (v.kind === 'stock' ? broker.status().capabilities?.stockOptions : v.exchange === 'BSE' ? broker.status().capabilities?.bseIndexOptions : broker.status().capabilities?.indexOptions))));
   const out = Object.fromEntries(REPLAY.symbols.map((s) => [s, { ...INDICES[s] }]));
   try { for (const i of (await provider.indices()).indices) out[i.symbol].lot = i.lot; } catch {}
   return out;
@@ -77,7 +92,7 @@ const routes = {
   'GET /api/intraday': async (q) => provider.intraday(sym(q)),
   'GET /api/daily': async (q) => ({ rows: await provider.daily(sym(q), Math.min(Number(q.get('days')) || 365, 730)) }),
   'GET /api/option-intraday': async (q) => provider.optionIntraday(q.get('id')),
-  // Option price history from INDstocks: live contracts by id, expired ones by trading symbol (live mode only).
+  // Option price history from the selected broker: live contracts by id, expired ones by trading symbol (live mode only).
   'GET /api/option-candles': async (q) => needBroker().optionCandles(q.get('id'), q.get('range') || '1D'),
   'GET /api/expired/expiries': async (q) => ({ expiries: await needBroker().expiredExpiries(sym(q)) }),
   'GET /api/expired/contracts': async (q) => ({ contracts: await needBroker().expiredContracts(sym(q), q.get('expiry')) }),
@@ -145,8 +160,9 @@ const routes = {
   },
   // Broker connection (live mode). The token goes in, never comes back out: status only says whether it works.
   'GET /api/broker': async () => (broker ? broker.status() : { available: false }),
-  'POST /api/broker': async (q, b) => { if (!broker) throw new Error('Switch to live prices to connect INDstocks.'); return broker.setToken(b.token); },
-  'POST /api/broker/forget': async () => { if (!broker) throw new Error('Switch to live prices first.'); return broker.forget(); },
+  'POST /api/broker': async (q, b) => { if (!broker) throw new Error('Switch to live prices to connect a broker.'); return broker.connect(b.provider || broker.selected, b.credentials || { token: b.token }); },
+  'POST /api/broker/select': async (q, b) => { if (!broker) throw new Error('Switch to live prices first.'); return broker.select(b.provider); },
+  'POST /api/broker/forget': async (q, b) => { if (!broker) throw new Error('Switch to live prices first.'); return broker.forget(b.provider || broker.selected); },
   'GET /api/update': async (q) => desktop.checkUpdate(q.get('force') === '1'),
   'POST /api/update': async () => { const r = await desktop.installUpdate(); desktop.restart(MOCK); return r; },
   'POST /api/restart': async (q, b) => { desktop.restart(b.sim ?? MOCK); return { ok: true }; },
@@ -202,9 +218,9 @@ server.on('error', (e) => {
 });
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Optionwise is running: http://localhost:${PORT}`);
-  console.log(`  Data: ${MOCK ? 'replay of past NSE days' : 'live (INDstocks when connected, else NSE website)'} · Account: ${path.join(desktop.DATA_DIR, MOCK ? 'replay.json' : 'paper.json')}`);
+  console.log(`  Data: ${MOCK ? 'replay of past NSE days' : 'live (selected broker when connected, else NSE website)'} · Account: ${path.join(desktop.DATA_DIR, MOCK ? 'replay.json' : 'paper.json')}`);
   if (desktop.PACKAGED && desktop.env('RESTART') !== '1' && !desktop.env('NO_WINDOW')) desktop.openWindow(`http://localhost:${PORT}`);
   console.log('  Keep this window open. Press Ctrl+C to stop.\n');
-  if (!MOCK) console.log(`  INDstocks: ${broker.token ? `token from ${broker.source === 'env' ? '.env' : 'the app (encrypted)'}` : 'no token yet, using NSE website data'}`);
-  if (!MOCK) provider.indices().then(() => console.log(`  Connected to ${provider.name}.`)).catch((e) => console.log(`  Could not reach NSE yet: ${e.message}. The app will keep retrying.`));
+  if (!MOCK) console.log(`  Data: ${broker.selected}${broker.usable() ? ' (credentials saved)' : ' (not connected)'}; using NSE website fallback when needed.`);
+  if (!MOCK) provider.indices().then(() => console.log(`  Connected to ${provider.name}.`)).catch((e) => console.log(`  Could not reach market data yet: ${e.message}. The app will keep retrying.`));
 });

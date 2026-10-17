@@ -8,9 +8,14 @@ import { hexA } from './markets.js';
 import { candleChart } from './candles.js';
 
 let cur = null, chart = null, ser = null, timer = null, cc = null, range = '1D';
-// INDstocks contracts have candle history (1D/5D/1M/life); NSE-website and replay ones only today's line.
+// Broker contracts have candle history (1D/5D/1M/life); NSE-website and replay ones only today's line.
 const RANGES = [['1D', 'Today, by the minute'], ['5D', 'Last 5 days, 5-minute candles'], ['1M', 'Last month, hourly candles'], ['life', 'Since the contract was listed, daily candles']];
-const hasCandles = (id) => /^[NB]FO_\d+$/.test(id || '') && !S.meta.replay;
+const hasCandles = (id) => {
+  const s = String(id || ''), via = S.meta.broker?.provider;
+  if (S.meta.replay) return false;
+  return /^[NB]FO_\d+$/.test(s) || /^(BREEZE|ANGEL)\|/.test(s) || (via === 'fyers' && /^(NSE|BSE):/.test(s))
+    || (['upstox', 'kotak'].includes(via) && /^[nb]se_fo\|\d+$/i.test(s));
+};
 
 export function open(leg) {
   cur = leg;
