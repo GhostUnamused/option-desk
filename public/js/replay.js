@@ -338,7 +338,7 @@ function dataPanel() {
       status.download = await api('/api/replay/download', { from: from.value, to: to.value, symbols });
       if (m?.source.connected) {
         status.minutes.download = await api('/api/replay/minutes/download', { from: from.value, to: to.value, symbols });
-      } else toast('Daily history started. Connect INDstocks to include minute prices.', 'err');
+      } else toast('Daily history started. Minute prices come from days the app recorded in live mode, or from a broker with expired-contract history.');
       watchDownload();
     } catch (e) { toast(e.message, 'err'); watchDownload(); }
   } });
@@ -354,8 +354,8 @@ function dataPanel() {
     ? `${inr0.format(mc.indexDays)} index days, ${fmtDay(mc.indexFirst)} to ${fmtDay(mc.indexLast)} · option days: ${Object.entries(mc.bySymbol || {}).map(([s, n]) => `${S.meta.indices[s]?.short || s} ${n}`).join(' · ') || 'none yet'}`
     : 'No minute data downloaded yet.';
   const sourceNote = m?.source.connected
-    ? `Minute source is connected. Index bars go back to ${fmtDay(m.indexFrom)}; expired option prices begin with the ${fmtDay(m.optionsFrom)} expiry. Earlier dates in your range still download daily history.`
-    : `Minute source is not connected. ${m?.source.problem || 'Connect INDstocks from the Data button to add minute history.'} Daily history is still available.`;
+    ? `Past minute prices download from ${m.source.name}: index bars go back to ${fmtDay(m.indexFrom)}; expired option prices begin with the ${fmtDay(m.optionsFrom)} expiry. Earlier dates in your range still download daily history.`
+    : `No broker with expired-contract history is connected (INDstocks, or Upstox with its Plus plan), so this downloads daily history only. Minute replay still works for days the app recorded in live mode: with "Save minute prices for replay" on (the Data button in live mode), every market day the app is open is saved minute by minute.`;
   return el('div', { class: 'panel', id: 'rpData' },
     el('div', { class: 'panel-h rp-download-heading' }, el('h2', { text: 'Replay data' }), el('span', { class: 'note', text: 'One range, one download. Covered daily dates and complete minute windows are skipped; partial minute windows refresh safely.' })),
     cov, gaps, errs,
@@ -367,7 +367,7 @@ function dataPanel() {
         el('div', { class: 'rp-range' }, el('label', { class: 'f', for: 'rpFrom' }, 'From', from), el('label', { class: 'f', for: 'rpTo' }, 'To', to))),
       el('div', { class: 'rp-presets' }, preset('3 months', 3), preset('6 months', 6), preset('1 year', 12), preset('All minute history', 0)),
       dl),
-    el('p', { class: 'note', style: { marginTop: '8px' }, text: `Daily NSE archives include options and closing prices for the selected indices${status.symbols?.length > selected.size ? ' only' : ''}. ${sourceNote} Minute option prices are available only for expired contracts. Each day gets the next four or five weekly expiries, which takes about 150 MB per month of minute history.` }),
+    el('p', { class: 'note', style: { marginTop: '8px' }, text: `Daily NSE archives include options and closing prices for the selected indices${status.symbols?.length > selected.size ? ' only' : ''}. ${sourceNote} Downloaded minute prices exist only for contracts that have expired. Each day gets the next four or five weekly expiries, which takes about 150 MB per month of minute history.${mc.needDaily ? ` ${mc.needDaily} recorded day${mc.needDaily === 1 ? '' : 's'} still need${mc.needDaily === 1 ? 's' : ''} daily history from NSE (fetched automatically once NSE publishes it, usually the same evening).` : ''}` }),
     el('div', { id: 'rpProgress' }), el('div', { id: 'rpMinProgress' }));
 }
 

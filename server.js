@@ -17,6 +17,8 @@ import { INDICES, PAPER, RISK_FREE, REPLAY, CHARGES, addStock, removeStock } fro
 import * as desktop from './lib/desktop.js';
 import { ReplayEngine } from './lib/replay/engine.js';
 import { ReplayProvider } from './lib/replay/provider.js';
+import { ReplayStore, hasSqlite } from './lib/replay/store.js';
+import { MinuteRecorder } from './lib/replay/recorder.js';
 import { disguise } from './lib/replay/blind.js';
 import { News } from './lib/news.js';
 import { eventsUpTo } from './lib/events.js';
@@ -30,9 +32,22 @@ const MOCK = process.env.MOCK === '1' || process.argv.includes('--sim') || proce
 desktop.migrateData();
 loadDotEnv(path.join(ROOT, '.env')); // source runs only: optional developer credentials; end users connect in the app
 let replay = null, replayError = null;
-// Replay's minute-history source remains independent of the selected live broker so provider changes cannot affect daily replay.
-const history = MOCK ? new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat'))) : null;
-if (MOCK) { try { replay = new ReplayEngine(desktop.DATA_DIR, { history: () => history }); } catch (e) { replayError = e.message; console.log(`  Replay unavailable: ${e.message}`); } }
+const BROKER_SETTINGS = path.join(desktop.DATA_DIR, 'broker-settings.json');
+// Replay downloads minute history from a broker that sells expired-contract history, with the credentials saved in live
+// mode: the broker chosen there if it is one of these, else whichever is connected.
+const historySources = MOCK ? {
+  indstocks: new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat'))),
+  upstox: new UpstoxProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker-upstox.dat'))),
+} : null;
+const history = () => {
+  let chosen = null; try { chosen = JSON.parse(fs.readFileSync(BROKER_SETTINGS, 'utf8')).provider; } catch {}
+  const list = [historySources[chosen], ...Object.values(historySources)].filter(Boolean);
+  return list.find((p) => p.usable()) || historySources.indstocks;
+};
+if (MOCK) {
+  try { replay = new ReplayEngine(desktop.DATA_DIR, { history }); replay.fillRecordedDays(); }
+  catch (e) { replayError = e.message; console.log(`  Replay unavailable: ${e.message}`); }
+}
 // One selected read-only broker provides live data. NSE remains the fallback; broker credentials are kept separately.
 const adapters = MOCK ? null : {
   indstocks: new IndstocksProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker.dat')), { stream: true }),
@@ -43,7 +58,7 @@ const adapters = MOCK ? null : {
   angelone: new AngelOneProvider(new NseProvider(), new SecretFile(path.join(desktop.DATA_DIR, 'broker-angelone.dat'))),
 };
 if (adapters) adapters.indstocks.capabilities = { indexOptions: true, bseIndexOptions: true, stockOptions: true, expiredOptions: true, optionCandles: true, stream: true };
-const broker = MOCK ? null : new BrokerManager(adapters, path.join(desktop.DATA_DIR, 'broker-settings.json'));
+const broker = MOCK ? null : new BrokerManager(adapters, BROKER_SETTINGS);
 // Stocks the owner follows (their options join the symbol list). Kept with their lot, strike step and INDstocks id.
 const WATCH_FILE = path.join(desktop.DATA_DIR, 'watchlist.json');
 let watchlist = []; try { watchlist = JSON.parse(fs.readFileSync(WATCH_FILE, 'utf8')); } catch {}
@@ -54,6 +69,10 @@ const provider = MOCK ? (replay?.provider || new ReplayProvider({ snapshot() { t
 const account = MOCK ? replay?.account : new PaperAccount(path.join(desktop.DATA_DIR, 'paper.json'), provider);
 const news = new News({ cacheFile: path.join(desktop.DATA_DIR, 'news-cache.json') });
 const liveHist = MOCK ? null : new LiveOptionHistory(desktop.DATA_DIR, provider);
+// Live mode records minute prices into replay.db from whatever source answers (needs node:sqlite, Node 22.13+).
+let recStore = null;
+const recorder = !MOCK && hasSqlite() ? new MinuteRecorder(() => (recStore ||= new ReplayStore(path.join(desktop.DATA_DIR, 'replay.db'))), provider).start() : null;
+process.on('exit', () => { try { recorder?.flush(); } catch {} });
 const istToday = () => new Date(Date.now() + 19800e3).toISOString().slice(0, 10);
 // Headlines and event names give the real date away, so a blind session gets none.
 const BLIND_NEWS = 'News and event markers are hidden in blind mode, because headlines would give away the real date.';
@@ -162,6 +181,9 @@ const routes = {
   'GET /api/broker': async () => (broker ? broker.status() : { available: false }),
   'POST /api/broker': async (q, b) => { if (!broker) throw new Error('Switch to live prices to connect a broker.'); return broker.connect(b.provider || broker.selected, b.credentials || { token: b.token }); },
   'POST /api/broker/select': async (q, b) => { if (!broker) throw new Error('Switch to live prices first.'); return broker.select(b.provider); },
+  // Live-mode minute recording for replay: status, and the on/off switch (kept in replay.db settings).
+  'GET /api/recorder': async () => (recorder ? recorder.status() : { available: false }),
+  'POST /api/recorder': async (q, b) => { if (!recorder) throw new Error(MOCK ? 'Recording runs in live mode.' : 'Recording needs Node.js 22.13 or newer.'); return recorder.setEnabled(b.enabled); },
   'POST /api/broker/forget': async (q, b) => { if (!broker) throw new Error('Switch to live prices first.'); return broker.forget(b.provider || broker.selected); },
   'GET /api/update': async (q) => desktop.checkUpdate(q.get('force') === '1'),
   'POST /api/update': async () => { const r = await desktop.installUpdate(); desktop.restart(MOCK); return r; },

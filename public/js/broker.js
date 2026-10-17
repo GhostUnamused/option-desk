@@ -75,7 +75,24 @@ function render(error = '') {
       el('p', { text: p.help }),
       el('ol', { class: 'bk-steps' }, el('li', {}, 'Open ', el('a', { href: p.link, target: '_blank', rel: 'noopener', text: `${p.name} API settings` }), ' and sign in.'), el('li', { text: p.id === 'kotak' ? 'Create or open your Trade API app and copy its consumer key.' : p.id === 'breeze' ? 'Create a Breeze API app, sign in to its login page, then copy API_Session from the redirect URL.' : p.id === 'angelone' ? 'Create a SmartAPI app and generate a current TOTP in your authenticator.' : 'Create or open your personal API app and copy its current market-data token.' })),
       clientId, breezeAppKey, breezeSecret, angelApiKey, angelClientCode, angelPin, token, err,
-      el('p', { class: 'note', text: 'Credentials stay on this computer (encrypted for your Windows account). Optionwise only requests market data; it never sends orders to your broker.' })),
+      el('p', { class: 'note', text: 'Credentials stay on this computer (encrypted for your Windows account). Optionwise only requests market data; it never sends orders to your broker.' }),
+      recorderBox()),
     el('div', { class: 'tk-f' }, forget, st.connected ? null : el('button', { class: 'btn ghost', type: 'button', text: 'Use NSE data instead', onclick: () => { store.set('brokerSkip', true); dlg.close(); } }), connect)));
   if (error) dlg.querySelector('.tok:last-of-type')?.focus();
+}
+
+// Minute recording for replay (lib/replay/recorder.js): works with any broker or with NSE data.
+function recorderBox() {
+  const box = el('div', { class: 'bk-rec', style: { marginTop: '10px' } });
+  api('/api/recorder').then((r) => {
+    if (r.available === false) return;
+    const sw = el('input', { type: 'checkbox', checked: r.enabled, onchange: async () => {
+      try { await api('/api/recorder', { enabled: sw.checked }); toast(sw.checked ? 'Minute prices will be saved for replay while the app is open during market hours.' : 'Minute recording is off.'); }
+      catch (x) { sw.checked = !sw.checked; toast(x.message, 'err'); }
+    } });
+    const now = r.recording ? `Recording now from ${r.source || 'the current data source'}. ` : '';
+    box.replaceChildren(el('label', { class: 'check' }, sw, el('span', {}, el('b', { text: 'Save minute prices for replay' }),
+      `: while Optionwise is open during market hours, it saves NIFTY and BANK NIFTY option prices each minute so you can replay those days minute by minute later. Works with any broker, or none. ${now}${r.minuteDays ? `Minute replay has ${r.minuteDays} day${r.minuteDays === 1 ? '' : 's'} so far.` : ''} Roughly 5–10 MB per day.`)));
+  }).catch(() => {});
+  return box;
 }
