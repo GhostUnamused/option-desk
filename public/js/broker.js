@@ -96,7 +96,7 @@ function nsePanel() {
     el('div', { class: 'tk-f' }, el('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: () => { askNse = false; render(); } }), el('button', { class: 'btn', type: 'button', text: 'I understand, use NSE data', onclick: () => setNse(true) })));
   if (st.connected) return el('label', { class: 'check', style: { marginTop: '10px' } },
     el('input', { type: 'checkbox', checked: st.nse, onchange: (e) => setNse(e.target.checked) }),
-    el('span', {}, el('b', { text: 'Also allow NSE website data as a backup' }), ': used only for things your broker does not provide, or if it is down. Off for new installs (kept on if you had a broker connected before version 0.10); NSE’s Terms of Use restrict automated collection, so this is your choice.'));
+    el('span', {}, el('b', { text: 'Also allow NSE website data as a backup' }), ': used only for things your broker does not provide, or if it is down or your token has expired. On when you connect a broker, so prices keep coming; NSE’s Terms of Use restrict automated collection, so untick it if you want broker data only.'));
   return null;
 }
 

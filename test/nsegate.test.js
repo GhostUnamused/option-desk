@@ -42,3 +42,17 @@ test('an install from before 0.10 with a saved broker keeps NSE as a backup; a f
   assert.equal(new BrokerManager({ indstocks: env }, tmp()).nse, false, 'a .env token in a source run is not an old install');
   nseGate.open = true;
 });
+
+test('connecting a broker turns NSE backup on, unless the person already chose', async () => {
+  const conn = { ...fake, setToken: async () => {} };
+  let m = new BrokerManager({ indstocks: conn }, tmp());
+  await m.connect('indstocks', { token: 't' });
+  assert.equal(m.nse, true, 'first connection: backup on');
+  assert.equal(nseGate.open, true);
+  m.setNse(false);
+  const file = m.settingsFile;
+  m = new BrokerManager({ indstocks: conn }, file);
+  await m.connect('indstocks', { token: 't2' });
+  assert.equal(m.nse, false, 'after unticking, a fresh token does not turn it back on');
+  nseGate.open = true;
+});
