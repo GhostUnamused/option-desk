@@ -26,3 +26,19 @@ test('NSE stays off until chosen, and the choice is remembered', async () => {
   m.setNse(false);
   nseGate.open = true; // leave the shared gate open for other test files
 });
+
+test('an install from before 0.10 with a saved broker keeps NSE as a backup; a fresh one does not', () => {
+  const saved = { ...fake, status: () => ({ connected: false, hasToken: true, source: 'saved' }) };
+  const env = { ...fake, status: () => ({ connected: false, hasToken: true, source: 'env' }) };
+  const old = tmp(); fs.writeFileSync(old, JSON.stringify({ provider: 'indstocks' }));
+  let m = new BrokerManager({ indstocks: saved }, old);
+  assert.equal(m.nse, true);
+  assert.equal(m.status().needsChoice, false, 'an expired token must not leave an old install without prices');
+  assert.equal(JSON.parse(fs.readFileSync(old, 'utf8')).nse, true, 'the migration is written down once');
+  m.setNse(false);
+  assert.equal(new BrokerManager({ indstocks: saved }, old).nse, false, 'turning it off afterwards sticks');
+  assert.equal(new BrokerManager({ indstocks: saved }, tmp()).nse, true, 'saved credentials without a settings file count too');
+  assert.equal(new BrokerManager({ indstocks: fake }, tmp()).nse, false, 'fresh install: off');
+  assert.equal(new BrokerManager({ indstocks: env }, tmp()).nse, false, 'a .env token in a source run is not an old install');
+  nseGate.open = true;
+});
