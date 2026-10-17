@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yaminichandrakj.github.io/optionwise/sitemap.xml

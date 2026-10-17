@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en-IN" data-device="windows">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optionwise · Practise NSE index options with no real money</title>
+<meta name="description" content="Optionwise is a free Windows app for learning NSE index options: guided lessons, a broker-style option chain, a strategy builder and paper trading on real past market days, with no real money.">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="https://yaminichandrakj.github.io/optionwise/">
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Optionwise">
+<meta property="og:title" content="Optionwise: practise NSE index options with no real money">
+<meta property="og:description" content="Learn options by trading real past market days on a paper account. Free Windows app, source-available.">
+<meta property="og:url" content="https://yaminichandrakj.github.io/optionwise/">
+<meta property="og:image" content="https://yaminichandrakj.github.io/optionwise/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Optionwise: a payoff chart and the words Learn NSE index options with no real money">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="assets/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/plus-jakarta-sans-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/site.css">
+<script defer src="vendor/lightweight-charts.standalone.production.js"></script>
+<script type="module" src="js/main.js"></script>
+<script type="module" src="js/demo.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav wrap">
+  <a class="brand" href="#top" aria-label="Optionwise, back to top">
+    <img src="assets/favicon-32x32.png" width="24" height="24" alt="">
+    <span>Optionwise</span>
+  </a>
+  <nav aria-label="Sections">
+    <a href="#demo">Demo</a>
+    <a href="#features">What you get</a>
+    <a href="#data">Data</a>
+    <a href="#download">Download</a>
+    <a href="#source">Source</a>
+  </nav>
+  <a class="star" href="https://github.com/yaminichandrakj/optionwise" data-star>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .9l2.2 4.5 4.9.7-3.6 3.5.9 4.9L8 12.2l-4.4 2.3.9-4.9L.9 6.1l4.9-.7z"/></svg>
+    <span class="star-label">Star on GitHub</span><span class="star-count" hidden></span>
+  </a>
+</header>
+
+<main id="main">
+
+<!-- 1. Hero -->
+<section class="hero wrap" id="top" aria-labelledby="hero-title">
+  <div class="hero-text">
+    <p class="eyebrow">Free Windows app for beginners</p>
+    <h1 id="hero-title">Optionwise</h1>
+    <p class="lead">Learn NSE index options by practising on real past days, with no real money.</p>
+    <div class="cta-row">
+      <a class="btn big" href="#demo" data-scroll>Try the 90-second demo</a>
+      <div class="cta" data-cta="hero">
+        <a class="btn ghost big" href="https://github.com/yaminichandrakj/optionwise/releases/latest/download/Optionwise.exe">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 12.5V14h12v-1.5"/></svg>
+          Download for Windows</a>
+      </div>
+    </div>
+    <p class="fine">Free for noncommercial use. Source-available. Windows app.</p>
+  </div>
+  <figure class="hero-art" aria-hidden="true">
+    <svg viewBox="0 0 420 300" class="hero-svg">
+      <defs>
+        <linearGradient id="hg" x1="0" x2="1"><stop offset="0" stop-color="#089981" stop-opacity="0"/><stop offset=".55" stop-color="#089981" stop-opacity=".25"/><stop offset="1" stop-color="#089981" stop-opacity=".05"/></linearGradient>
+      </defs>
+      <g stroke="#1A1A1A"><path d="M20 60H400M20 120H400M20 180H400M20 240H400"/><path d="M80 30V270M180 30V270M280 30V270M380 30V270"/></g>
+      <path d="M20 180H400" stroke="#3A3A3A" stroke-dasharray="4 4"/>
+      <path d="M20 214H220L400 34V214Z" fill="url(#hg)" opacity=".7"/>
+      <path class="hero-curve" d="M20 213C120 212 175 206 214 190S300 110 400 40" fill="none" stroke="#8E8E93" stroke-width="2" stroke-dasharray="5 5"/>
+      <path d="M20 214H220L400 34" fill="none" stroke="#E8E8E8" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="254" cy="180" r="5" fill="#000" stroke="#E8E8E8" stroke-width="2"/>
+      <text x="262" y="200" fill="#8E8E93" font-size="12" font-family="Inter, sans-serif">breakeven</text>
+      <text x="24" y="232" fill="#F23645" font-size="12" font-family="Inter, sans-serif">most you can lose: the premium</text>
+      <text x="300" y="30" fill="#089981" font-size="12" font-family="Inter, sans-serif">gain grows</text>
+    </svg>
+    <figcaption>Payoff of buying a call: what you make or lose at expiry for each index level.</figcaption>
+  </figure>
+</section>
+
+<!-- 2. Demo -->
+<section class="demo-sec wrap" id="demo" aria-labelledby="demo-title">
+  <div class="sec-head">
+    <p class="eyebrow">Guided demo · about 90 seconds</p>
+    <h2 id="demo-title">One practice session, start to finish</h2>
+    <p class="sample-note" role="note"><span class="led" aria-hidden="true"></span>Sample data for illustration. Not real prices.</p>
+  </div>
+  <div id="demo-root" class="demo-root">
+    <noscript><p class="muted">The demo needs JavaScript. The rest of this page works without it.</p></noscript>
+  </div>
+</section>
+
+<!-- 3. What you get -->
+<section class="wrap" id="features" aria-labelledby="features-title">
+  <div class="sec-head">
+    <p class="eyebrow">What you get</p>
+    <h2 id="features-title">Six tabs, one practice desk</h2>
+    <p class="sub">Everything runs on your own computer. Words that might be new are explained in the app when you hover or tap them.</p>
+  </div>
+  <div class="cards">
+    <article class="card">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>
+      <h3>Learn</h3>
+      <p>Six short lessons on what moves an option's price, each with a slider to try and a quick check question. Includes the Greeks: small numbers that say how a price reacts to the index, to time passing and to fear in the market.</p>
+    </article>
+    <article class="card">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 15l4-5 3 3 5-7"/></svg>
+      <h3>Markets</h3>
+      <p>An index chart and a plain-English read of the market: the trend, India VIX (the market's "fear gauge") and the expected move, which is how far traders are pricing the index to travel.</p>
+    </article>
+    <article class="card">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M4 14.5h16M12 5v14"/></svg>
+      <h3>Option chain</h3>
+      <p>The list of every call (a bet the index rises) and put (a bet it falls) at each strike price, laid out like a broker's screen. Click any price to see its chart and what drives it.</p>
+    </article>
+    <article class="card">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17h7l4-10h7M3 7h4"/></svg>
+      <h3>Strategy builder</h3>
+      <p>Pick one of twelve ready-made strategies or build your own. A payoff chart shows what you make or lose at each index level, with your maximum profit, maximum loss and breakeven (the level where you neither win nor lose).</p>
+    </article>
+    <article class="card">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4 4v3.5h3.5"/></svg>
+      <h3>Replay</h3>
+      <p>Go back to a real past market day and trade it as if it were today, step by step or minute by minute. Blind mode hides the date so you can't remember what happened next.</p>
+    </article>
+    <article class="card">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM8 7V5h8v2M4 12h16"/></svg>
+      <h3>Paper account</h3>
+      <p>A pretend balance of ₹5,00,000 to trade with. Each trade asks for your reason and exit plan, pays realistic charges, and shows its profit or loss as prices move. No real money, ever.</p>
+    </article>
+  </div>
+</section>
+
+<!-- 4. Connect your own broker -->
+<section class="wrap split" id="data" aria-labelledby="data-title">
+  <div class="sec-head">
+    <p class="eyebrow">Where the prices come from</p>
+    <h2 id="data-title">Connect your own broker</h2>
+    <p class="sub">Optionwise runs on your computer. There is no Optionwise server and nothing is shared. For live prices it uses your own broker's market-data API, under terms you've already agreed with that broker. It only reads prices and never places real orders.</p>
+    <p class="sub">Data from NSE's website (the National Stock Exchange) is switched off until you choose it, after a short notice about NSE's terms. When you connect a broker, NSE data is allowed as a backup so prices keep coming if your token expires; untick it in the Data menu for broker data only.</p>
+    <p><a class="link" href="https://github.com/yaminichandrakj/optionwise#where-the-prices-come-from">Read how data works in the README <span aria-hidden="true">→</span></a></p>
+  </div>
+  <ul class="brokers" aria-label="Supported brokers">
+    <li><span class="pill ok">Most tested</span><b>INDstocks</b><small>INDmoney's official API</small></li>
+    <li><span class="pill warn">Experimental</span><b>FYERS</b></li>
+    <li><span class="pill warn">Experimental</span><b>Upstox</b></li>
+    <li><span class="pill warn">Experimental</span><b>Kotak Neo</b></li>
+    <li><span class="pill warn">Experimental</span><b>ICICI Breeze</b></li>
+    <li><span class="pill warn">Experimental</span><b>Angel One</b></li>
+    <li class="brokers-note">Experimental means tested against simulated broker replies but not yet checked with real accounts. If one fails, the app falls back to NSE website data only if you've allowed it as a backup. Your credentials stay on your computer, encrypted with your Windows account.</li>
+  </ul>
+</section>
+
+<!-- 5. Download and verify -->
+<section class="wrap" id="download" aria-labelledby="download-title">
+  <div class="sec-head">
+    <p class="eyebrow">Download</p>
+    <h2 id="download-title">Download and verify</h2>
+  </div>
+  <div class="dl-grid">
+    <div class="panel">
+      <h3>Get the app</h3>
+      <p class="muted">One file, nothing else to install. Your paper account stays on your computer and updates arrive inside the app.</p>
+      <div class="cta" data-cta="download">
+        <a class="btn big" href="https://github.com/yaminichandrakj/optionwise/releases/latest/download/Optionwise.exe">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v9m0 0L4.5 6.5M8 10l3.5-3.5M2 12.5V14h12v-1.5"/></svg>
+          Download for Windows</a>
+      </div>
+      <p class="callout"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l6.5 12H1.5zM8 6v3.5M8 11.5v.01"/></svg>
+        <span>Windows may show a SmartScreen warning because the app is not code-signed. Click <b>More info</b>, then <b>Run anyway</b>. The full source is public so you can check what it does.</span></p>
+      <p class="muted small">On macOS or Linux? Run it from source with <a class="link" href="https://github.com/yaminichandrakj/optionwise#start-it">Node.js 22.13 or newer</a>.</p>
+    </div>
+    <div class="panel">
+      <h3>Verify your download</h3>
+      <p class="muted">Each release page lists a SHA-256 fingerprint of the file. Open PowerShell in the folder you saved it to and run:</p>
+      <div class="code">
+        <code id="hash-cmd">Get-FileHash .\Optionwise.exe -Algorithm SHA256</code>
+        <button class="btn ghost sm" type="button" data-copy="#hash-cmd">Copy</button>
+      </div>
+      <p class="muted small">The <code>Hash</code> it prints must match the Optionwise.exe line under "Checksums (SHA-256)" on the <a class="link" href="https://github.com/yaminichandrakj/optionwise/releases/latest">release page</a>. If it doesn't, delete the file and download it again. <a class="link" href="https://github.com/yaminichandrakj/optionwise#verify-your-download">More detail</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Source -->
+<section class="wrap" id="source" aria-labelledby="source-title">
+  <div class="panel source">
+    <div>
+      <p class="eyebrow">Source-available</p>
+      <h2 id="source-title">Read every line of it</h2>
+      <p class="sub">The code is public under the PolyForm Noncommercial License 1.0.0: you can read it, run it, learn from it and change it for personal, study and other noncommercial use. Bug reports and broker test reports are welcome.</p>
+      <ul class="links">
+        <li><a class="link" href="https://github.com/yaminichandrakj/optionwise">Repository on GitHub</a></li>
+        <li><a class="link" href="https://github.com/yaminichandrakj/optionwise/blob/main/LICENSE">Licence: PolyForm Noncommercial 1.0.0</a></li>
+        <li><a class="link" href="https://github.com/yaminichandrakj/optionwise/blob/main/CONTRIBUTING.md">How to contribute</a></li>
+        <li><a class="link" href="https://github.com/yaminichandrakj/optionwise/issues/new/choose">Report a bug or a broker result</a></li>
+      </ul>
+    </div>
+    <a class="star big" href="https://github.com/yaminichandrakj/optionwise" data-star>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .9l2.2 4.5 4.9.7-3.6 3.5.9 4.9L8 12.2l-4.4 2.3.9-4.9L.9 6.1l4.9-.7z"/></svg>
+      <span class="star-label">Star on GitHub</span><span class="star-count" hidden></span>
+    </a>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot wrap">
+  <p><b>Optionwise</b> is an educational paper-trading tool. It is not investment advice, and it never places real orders.</p>
+  <p>Not affiliated with or endorsed by NSE or any broker, including INDstocks (INDmoney), FYERS, Upstox, Kotak Neo, ICICI Direct and Angel One. Market data belongs to its owners and is subject to their terms. Every number in the demo above is made up.</p>
+  <p>Charts by <a class="link" href="https://www.tradingview.com/">TradingView</a> Lightweight Charts (Apache 2.0). Fonts: Inter and Plus Jakarta Sans (SIL Open Font License).</p>
+</footer>
+
+<template id="cta-phone">
+  <div class="cta-phone">
+    <p class="cta-lead"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-11zM1 12.5h14"/></svg>Open this on your laptop</p>
+    <p class="muted small">Optionwise is a Windows desktop app. Send yourself the link for later.</p>
+    <div class="cta-actions">
+      <button class="btn sm" type="button" data-copylink>Copy link</button>
+      <button class="btn ghost sm" type="button" data-share hidden>Share</button>
+      <a class="btn ghost sm" data-mail href="#">Email it to me</a>
+    </div>
+    <a class="link small" href="https://github.com/yaminichandrakj/optionwise">View on GitHub</a>
+  </div>
+</template>
+<template id="cta-other">
+  <div class="cta-other">
+    <a class="btn ghost big" href="https://github.com/yaminichandrakj/optionwise#start-it">Windows app. Run from source on macOS/Linux</a>
+    <a class="link small" href="https://github.com/yaminichandrakj/optionwise/releases/latest/download/Optionwise.exe">Download the Windows exe anyway</a>
+  </div>
+</template>
+</body>
+</html>
