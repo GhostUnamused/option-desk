@@ -78,15 +78,19 @@ export function drawPayoff(box, legs, { spot, iv, days = 0, r = 0.06, nowLabel =
   const hit = mk('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent' }); svg.append(hit);
   box.replaceChildren(svg);
   const tip = tipBox || el('div', { class: 'tip' }); if (!tipBox) box.append(tip);
-  hit.addEventListener('mousemove', (ev) => {
+  // The chart is rebuilt when prices change; the last pointer position is kept on the box so the read-out comes straight back.
+  const move = (ev) => {
+    box._pt = { clientX: ev.clientX, clientY: ev.clientY };
     const rc = svg.getBoundingClientRect(); const sx = (ev.clientX - rc.left) * W / rc.width; const x = lo + (sx - m.l) / (W - m.l - m.r) * (hi - lo);
     const e = pnlAt(legs, x, { atExpiry: true, r }), n = pnlAt(legs, x, { days, r, spot, ivShiftPct });
     for (const [k, v] of [['x1', X(x)], ['x2', X(x)]]) rule.setAttribute(k, v); rule.setAttribute('opacity', 1);
     d1.setAttribute('cx', X(x)); d1.setAttribute('cy', Y(e)); d1.setAttribute('opacity', 1); d2.setAttribute('cx', X(x)); d2.setAttribute('cy', Y(n)); d2.setAttribute('opacity', 1);
     tip.replaceChildren(el('div', { class: 'muted', text: `Index ${inr0.format(x)} (${x >= spot ? '+' : '−'}${Math.abs((x / spot - 1) * 100).toFixed(2)}%)` }), el('div', { class: e >= 0 ? 'up' : 'down', text: `At expiry ${srs(e)}` }), el('div', { text: `${nowLabel} ${srs(n)}` }));
     tip.style.opacity = 1; const bx = box.getBoundingClientRect(); let tx = ev.clientX - bx.left + 14; if (tx + tip.offsetWidth > bx.width - 6) tx = ev.clientX - bx.left - tip.offsetWidth - 14; tip.style.left = tx + 'px'; tip.style.top = (ev.clientY - bx.top - 12) + 'px';
-  });
-  hit.addEventListener('mouseleave', () => { tip.style.opacity = 0; rule.setAttribute('opacity', 0); d1.setAttribute('opacity', 0); d2.setAttribute('opacity', 0); });
+  };
+  hit.addEventListener('mousemove', move);
+  if (box._pt) { const h = hit.getBoundingClientRect(); if (box._pt.clientX >= h.left && box._pt.clientX <= h.right && box._pt.clientY >= h.top && box._pt.clientY <= h.bottom) move(box._pt); else box._pt = null; }
+  hit.addEventListener('mouseleave', () => { box._pt = null; tip.style.opacity = 0; rule.setAttribute('opacity', 0); d1.setAttribute('opacity', 0); d2.setAttribute('opacity', 0); });
 }
 
 function niceTicks(a, b, n) { const raw = (b - a) / n, mag = 10 ** Math.floor(Math.log10(raw)), f = raw / mag, st = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag; const out = []; for (let v = Math.ceil(a / st) * st; v <= b + 1e-9; v += st) out.push(Math.abs(v) < 1e-9 ? 0 : v); return out; }

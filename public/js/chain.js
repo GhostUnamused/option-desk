@@ -76,7 +76,13 @@ export function init(sec) {
 
 function fillSelects() {
   const ss = $('#chSym'); ss.replaceChildren(...Object.entries(S.meta.indices).map(([k, v]) => new Option(v.short, k, false, k === S.symbol)), ...(stocks.available() ? [new Option('＋ Stock options…', '__add')] : []));
-  const es = $('#chExp'); es.replaceChildren(...(S.expiries[S.symbol] || []).map((e) => new Option(fmtExpiryLong(e), e, false, e === S.expiry[S.symbol])));
+  const es = $('#chExp'), priced = S.expiries[S.symbol] || [], unpriced = S.unpriced[S.symbol] || [];
+  // Minute replay lists every expiry trading that day; ones without downloaded minute prices are shown but can't be opened.
+  es.replaceChildren(...[...priced, ...unpriced].sort().map((e) => {
+    const o = new Option(fmtExpiryLong(e) + (priced.includes(e) ? '' : ' · no minute prices'), e, false, e === S.expiry[S.symbol]);
+    if (!priced.includes(e)) { o.disabled = true; o.title = 'This expiry traded that day, but its minute prices are not downloaded. Download minute history again in the Replay tab to add it.'; }
+    return o;
+  }));
   $('#chLeft').textContent = S.expiry[S.symbol] ? fmtLeft(S.expiry[S.symbol]) : '';
 }
 
@@ -84,7 +90,7 @@ export async function show() { await loadExpiries().catch(() => {}); fillSelects
 export function hide() {}
 export function tick() { refresh(false); }
 
-let chainData = null;
+let chainData = null, chainSig = '';
 // What the options are on, in words: 'share' for a stock, 'index' otherwise.
 const what = () => (cfg()?.kind === 'stock' ? 'share' : 'index');
 async function refresh(force) {
@@ -92,7 +98,10 @@ async function refresh(force) {
   try {
     const c = await loadChain(sym, exp, force);
     if (sym !== S.symbol || exp !== S.expiry[sym]) return;
-    chainData = c; render(); drawOI();
+    // A timed refresh with the same prices leaves the table alone, so hovered buttons and tooltips stay.
+    const sig = JSON.stringify([c.spot, c.rows]);
+    if (!force && sig === chainSig && chainData) return;
+    chainSig = sig; chainData = c; render(); drawOI();
   } catch (e) { tbody.replaceChildren(el('tr', {}, el('td', { colspan: '19', class: 'empty t', text: `Could not load the chain: ${e.message}` }))); }
 }
 

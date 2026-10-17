@@ -72,7 +72,7 @@ const routes = {
     charges: { brokers: CHARGES.brokers, perOrder: CHARGES.brokeragePerOrder },
     replay: MOCK ? (replay ? replay.publicState() : { available: false, error: replayError }) : null }),
   'GET /api/indices': async () => ({ ...(await provider.indices()), market: await provider.marketStatus().catch(() => null), broker: broker?.status() }),
-  'GET /api/expiries': async (q) => ({ expiries: await provider.expiries(sym(q)) }),
+  'GET /api/expiries': async (q) => ({ expiries: await provider.expiries(sym(q)), unpriced: (await provider.unpricedExpiries?.(sym(q))) || [] }),
   'GET /api/chain': async (q) => provider.chain(sym(q), q.get('expiry')),
   'GET /api/intraday': async (q) => provider.intraday(sym(q)),
   'GET /api/daily': async (q) => ({ rows: await provider.daily(sym(q), Math.min(Number(q.get('days')) || 365, 730)) }),

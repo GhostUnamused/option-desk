@@ -2,7 +2,7 @@
 import { api, el, $, inr0, inr2, rs, srs, pts, store, toast, fmtExpiry, fmtLeft } from './util.js';
 import { term } from './glossary.js';
 import { S, on, emit, cfg, loadChain, loadExpiries, analysisExpiry } from './state.js';
-import { yearsTo, bs } from './bs.js';
+import { yearsTo, bs, now } from './bs.js';
 import { analyze, greeks, drawPayoff, pnlAt, payoffLegend } from './payoff.js';
 import * as ticket from './ticket.js';
 
@@ -121,7 +121,14 @@ export async function show() {
   renderAll();
 }
 export function hide() {}
-export async function tick() { await refreshQuotes(); renderPrices(); renderCalc(); }
+let lastTick = '';
+// Redraw only when a quote or the clock's minute changed, so hover read-outs stay put between replay steps.
+export async function tick() {
+  await refreshQuotes();
+  const sig = JSON.stringify([legs, legs.map(quoteFor), Math.floor(now() / 60e3)]);
+  if (sig === lastTick) return;
+  lastTick = sig; renderPrices(); renderCalc();
+}
 
 async function refreshQuotes() {
   const pairs = [...new Set(legs.map((l) => `${l.symbol}|${l.expiry}`))];

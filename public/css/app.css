@@ -221,6 +221,20 @@ dialog#ticket::backdrop, dialog.sheet::backdrop, dialog.exit-rule-dialog::backdr
 .exit-rule-body p { margin: 0; line-height: 1.45; }
 .exit-rule-cell { min-width: 150px; }
 .exit-rule-summary { margin: 2px 0 5px; white-space: nowrap; }
+dialog.exit-rule-dialog { width: min(620px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; }
+.exit-chart { height: 220px; border: 1px solid var(--line); border-radius: var(--r); background: var(--well); }
+.exit-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.exit-fields .chips { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.exit-outcome { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel-2); }
+.exit-outcome .kv { display: flex; justify-content: space-between; gap: 12px; }
+.exit-outcome .kv .v { font-variant-numeric: tabular-nums; }
+.exit-warn { color: var(--warn); }
+.exit-track { position: relative; height: 10px; margin: 2px 0 6px; max-width: 160px; }
+.exit-track .et-bar { position: absolute; left: 0; right: 0; top: 3px; height: 4px; border-radius: 2px; }
+.exit-track .et-entry { position: absolute; top: 0; width: 1px; height: 10px; background: var(--muted); }
+.exit-track .et-now { position: absolute; top: 1px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--fg); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--fg); font: inherit; cursor: pointer; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+.linkbtn:hover { color: var(--accent-text); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px) scale(.985); } }
 .tk-h { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
 .tk-h h3 { font-size: 1.1rem; }

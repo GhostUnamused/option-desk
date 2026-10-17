@@ -47,7 +47,12 @@ export function init(sec) {
 export function show() { if (!chart) makeChart(); renderHead(); renderTable(); draw(true); renderRead(); news.refresh(); }
 export function hide() {}
 let ticks = 0;
-export async function tick() { renderRead(); if (++ticks % 12 === 0) news.refresh(); }
+let readSig = '';
+export async function tick() {
+  const sig = JSON.stringify([S.symbol, S.quotes]);
+  if (sig !== readSig) { readSig = sig; renderRead(); }
+  if (++ticks % 12 === 0) news.refresh();
+}
 
 function makeChart() {
   chart = new StudyChart($('#mkChart'), { height: 420,

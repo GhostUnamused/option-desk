@@ -7,6 +7,7 @@ export const S = {
   symbol: store.get('symbol', 'NIFTY'),
   expiry: {},          // chosen expiry per symbol
   expiries: {},        // available expiries per symbol
+  unpriced: {},        // replay only: expiries listed that day without downloaded minute prices
   quotes: null,        // { indices, vix, market }
   chains: new Map(),   // `${symbol}|${expiry}` -> chain
   account: null,
@@ -20,7 +21,11 @@ export const cfg = (symbol = S.symbol) => S.meta.indices[symbol];
 export const quote = (symbol = S.symbol) => S.quotes?.indices.find((i) => i.symbol === symbol) || null;
 
 export async function loadExpiries(symbol = S.symbol) {
-  if (!S.expiries[symbol]) S.expiries[symbol] = (await api(`/api/expiries?symbol=${symbol}`)).expiries.filter((e) => daysTo(e) > -0.01);
+  if (!S.expiries[symbol]) {
+    const r = await api(`/api/expiries?symbol=${symbol}`);
+    S.expiries[symbol] = r.expiries.filter((e) => daysTo(e) > -0.01);
+    S.unpriced[symbol] = r.unpriced || [];
+  }
   if (!S.expiry[symbol] || !S.expiries[symbol].includes(S.expiry[symbol])) S.expiry[symbol] = S.expiries[symbol][0];
   return S.expiries[symbol];
 }
@@ -54,8 +59,11 @@ export function setSymbol(symbol) {
 // Replay moved to another day: forget everything priced on the old one.
 export function newDay() { S.expiries = {}; S.chains.clear(); emit('day'); }
 
-export async function refreshAccount() {
-  S.account = await api('/api/account');
-  emit('account', S.account);
-  return S.account;
+// Views redraw on 'account', which wipes hover tooltips, so it fires only when the account changed (or when forced).
+let lastAccount = '';
+export async function refreshAccount(force = false) {
+  const a = await api('/api/account'), sig = JSON.stringify(a);
+  S.account = a;
+  if (force || sig !== lastAccount) { lastAccount = sig; emit('account', a); }
+  return a;
 }

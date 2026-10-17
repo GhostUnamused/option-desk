@@ -367,7 +367,7 @@ function dataPanel() {
         el('div', { class: 'rp-range' }, el('label', { class: 'f', for: 'rpFrom' }, 'From', from), el('label', { class: 'f', for: 'rpTo' }, 'To', to))),
       el('div', { class: 'rp-presets' }, preset('3 months', 3), preset('6 months', 6), preset('1 year', 12), preset('All minute history', 0)),
       dl),
-    el('p', { class: 'note', style: { marginTop: '8px' }, text: `Daily NSE archives include options and closing prices for the selected indices${status.symbols?.length > selected.size ? ' only' : ''}. ${sourceNote} Minute option prices are available only for expired contracts. About 30 MB per month of minute history.` }),
+    el('p', { class: 'note', style: { marginTop: '8px' }, text: `Daily NSE archives include options and closing prices for the selected indices${status.symbols?.length > selected.size ? ' only' : ''}. ${sourceNote} Minute option prices are available only for expired contracts. Each day gets the next four or five weekly expiries, which takes about 150 MB per month of minute history.` }),
     el('div', { id: 'rpProgress' }), el('div', { id: 'rpMinProgress' }));
 }
 
