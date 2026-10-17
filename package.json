@@ -1,6 +1,6 @@
 {
   "name": "optionwise",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -16,6 +16,6 @@
     "node": ">=22.13"
   },
   "updates": {
-    "github": "GhostUnamused/optionwise"
+    "github": "yaminichandrakj/optionwise"
   }
 }
