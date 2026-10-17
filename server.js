@@ -180,6 +180,7 @@ const routes = {
   // Broker connection (live mode). The token goes in, never comes back out: status only says whether it works.
   'GET /api/broker': async () => (broker ? broker.status() : { available: false }),
   'POST /api/broker': async (q, b) => { if (!broker) throw new Error('Switch to live prices to connect a broker.'); return broker.connect(b.provider || broker.selected, b.credentials || { token: b.token }); },
+  'POST /api/broker/nse': async (q, b) => { if (!broker) throw new Error('Switch to live prices first.'); return broker.setNse(b.enabled === true); },
   'POST /api/broker/select': async (q, b) => { if (!broker) throw new Error('Switch to live prices first.'); return broker.select(b.provider); },
   // Live-mode minute recording for replay: status, and the on/off switch (kept in replay.db settings).
   'GET /api/recorder': async () => (recorder ? recorder.status() : { available: false }),
@@ -243,6 +244,6 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  Data: ${MOCK ? 'replay of past NSE days' : 'live (selected broker when connected, else NSE website)'} · Account: ${path.join(desktop.DATA_DIR, MOCK ? 'replay.json' : 'paper.json')}`);
   if (desktop.PACKAGED && desktop.env('RESTART') !== '1' && !desktop.env('NO_WINDOW')) desktop.openWindow(`http://localhost:${PORT}`);
   console.log('  Keep this window open. Press Ctrl+C to stop.\n');
-  if (!MOCK) console.log(`  Data: ${broker.selected}${broker.usable() ? ' (credentials saved)' : ' (not connected)'}; using NSE website fallback when needed.`);
+  if (!MOCK) console.log(`  Data: ${broker.selected}${broker.usable() ? ' (credentials saved)' : ' (not connected)'}; NSE website is ${broker.nse ? 'allowed as a source/backup' : 'switched off until you choose it in the Data menu'}.`);
   if (!MOCK) provider.indices().then(() => console.log(`  Connected to ${provider.name}.`)).catch((e) => console.log(`  Could not reach market data yet: ${e.message}. The app will keep retrying.`));
 });

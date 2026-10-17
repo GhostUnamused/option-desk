@@ -5,3 +5,9 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Code-signing certificates and keys
+*.pfx
+*.p12
+*.pvk
+*.snk

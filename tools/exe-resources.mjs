@@ -83,7 +83,9 @@ function versionInfo({ version, name, file, description, copyright }) {
   };
   const fixed = Buffer.alloc(52);
   [0xfeef04bd, 0x10000, (a << 16) | b, c << 16, (a << 16) | b, c << 16, 0x3f, 0, 0x4, 0x1, 0, 0, 0].forEach((v, i) => fixed.writeUInt32LE(v >>> 0, i * 4));
-  const strings = { CompanyName: name, FileDescription: description, FileVersion: version, InternalName: name, LegalCopyright: copyright, OriginalFilename: file, ProductName: name, ProductVersion: version };
+  // No InternalName (optional, and Explorer does not show it): node.exe's slot is only 744 bytes, and without it a
+  // two-digit version part (0.10.0) still fits with room to spare.
+  const strings = { CompanyName: name, FileDescription: description, FileVersion: version, LegalCopyright: copyright, OriginalFilename: file, ProductName: name, ProductVersion: version };
   const table = node('040904B0', null, Object.entries(strings).map(([k, v]) => node(k, wstr(v))));
   const sfi = node('StringFileInfo', null, [table]);
   const vfi = node('VarFileInfo', null, [node('Translation', Buffer.from([0x09, 0x04, 0xb0, 0x04]), [], 0)]);

@@ -10,9 +10,19 @@ Windows app, free for noncommercial use. Latest version and download: see [Relea
 
 **As an app (Windows):** double-click **Optionwise.exe**. It opens in its own window and needs nothing else installed. Close the window and it quits by itself a few seconds later.
 
-- The first time, Windows SmartScreen may say "Windows protected your PC" because the app is not code-signed. Click **More info**, then **Run anyway**.
+- The first time, Windows SmartScreen may say "Windows protected your PC" if the release you downloaded is not code-signed. Check the download first (see **Verify your download** below), then click **More info**, then **Run anyway**.
 - When a new version is out, an **Update to …** badge appears at the top. Click it; the app downloads, restarts and shows "Updated to …". Your paper account is kept.
 - **Switch to replay / Switch to live prices** (next to the data badge) restarts the app in replay mode (real past market days, see below) or back on live NSE prices. Use replay to practise when the market is closed.
+
+### Verify your download
+
+Each release page lists a **Checksums (SHA-256)** block: a fingerprint of every file as it was published. To check that your copy of Optionwise.exe is the same file, open PowerShell in the folder you saved it to and run:
+
+```powershell
+Get-FileHash .\Optionwise.exe -Algorithm SHA256
+```
+
+The `Hash` it prints must match the `Optionwise.exe` line on the release page (upper or lower case does not matter). If it does not match, delete the file and download it again from the [Releases](https://github.com/yaminichandrakj/optionwise/releases) page only. If a release says the exe is signed, you can also right-click it, choose **Properties**, then **Digital Signatures** to see who signed it. In-app updates check these hashes for you before installing.
 
 **From source:** install Node.js 22.13 or newer, then double-click **start.bat** (live) or **start-simulated.bat** (replay). Your browser opens http://localhost:4321. Keep the console window open while you use it. From a terminal: `node server.js` or `node server.js --sim`. Tests: `npm test`.
 
@@ -55,9 +65,11 @@ The replay balance (`replay.json`) is separate from the live paper account. Ever
 
 ## Where the prices come from
 
-By default, prices come from the same public JSON endpoints nseindia.com uses in your browser. They are unofficial, so NSE can rate-limit or change them. Prices refresh every few seconds: close to live, not tick-by-tick.
+**Please read this first.** Optionwise runs entirely on your own computer; there is no Optionwise server and nothing is redistributed. It can read NSE's public website, but NSE's [Terms of Use](https://www.nseindia.com/nse-terms-of-use) restrict automated data collection (clause 9) and the use of website content for virtual trading or simulation (clause 8). Optionwise is not affiliated with or endorsed by NSE, and using it with NSE's website as the source is your own responsibility. That is why Optionwise starts with your broker: on first launch it asks you to connect a broker API (INDstocks, FYERS, Upstox, Kotak Neo, ICICI Breeze or Angel One), which uses terms you have already accepted with that broker. NSE's website is **switched off until you choose it**: if you have no API key, pick "No API key? Use NSE website data" after reading the notice, or tick "Also allow NSE website data as a backup" next to a connected broker. The replay archive (NSE's daily files) is likewise public data fetched by you onto your own machine, and none of it is bundled or shared by this project.
 
-You can connect one provider for live market data from the Data button. **INDstocks is the most tested.** FYERS, Upstox, Kotak Neo, ICICI Breeze and Angel One are **experimental**: they are covered by tests against fake APIs but have not yet been checked against real accounts, and the app falls back to NSE data if they fail. Please report what you find. The providers are: INDstocks, FYERS, Upstox, Kotak Neo, ICICI Breeze or Angel One. The app uses your own credentials, stored locally and encrypted with your Windows account, and requests market data only. Kotak Neo uses one consumer key for quotes, option chains and active-contract candles; its index charts continue to use NSE's public endpoints. FYERS and Upstox access tokens expire daily. Breeze uses an App Key, Secret Key and daily API session; Angel One uses a SmartAPI key, client code, PIN and daily TOTP login. Provider coverage differs: BSE and stock options, expired options, streaming, and historical candle windows depend on the provider. Replay's minute-history downloader still uses INDstocks, while the daily NSE archive replay works without a broker connection.
+If you choose NSE website data, prices come from the same public JSON endpoints nseindia.com uses in your browser. They are unofficial, so NSE can rate-limit or change them. Prices refresh every few seconds: close to live, not tick-by-tick.
+
+You can connect one provider for live market data from the Data button. **INDstocks is the most tested.** FYERS, Upstox, Kotak Neo, ICICI Breeze and Angel One are **experimental**: they are covered by tests against fake APIs but have not yet been checked against real accounts, and if they fail the app falls back to NSE website data only if you have allowed it as a backup. Please report what you find. The providers are: INDstocks, FYERS, Upstox, Kotak Neo, ICICI Breeze or Angel One. The app uses your own credentials, stored locally and encrypted with your Windows account, and requests market data only. Kotak Neo uses one consumer key for quotes, option chains and active-contract candles; its index charts continue to use NSE's public endpoints. FYERS and Upstox access tokens expire daily. Breeze uses an App Key, Secret Key and daily API session; Angel One uses a SmartAPI key, client code, PIN and daily TOTP login. Provider coverage differs: BSE and stock options, expired options, streaming, and historical candle windows depend on the provider. Replay's minute-history downloader still uses INDstocks, while the daily NSE archive replay works without a broker connection.
 
 ## Settings
 
@@ -66,6 +78,8 @@ Lot sizes, charges and the margin model are in `lib/config.js`. Lot sizes follow
 ## Building and releasing
 
 - `node tools/build.mjs` builds `dist/Optionwise.exe` plus the release files, using the Node that runs it. No npm packages needed.
+- Optional code signing (needs `signtool.exe` from the Windows SDK): set `SIGN_CERT_THUMBPRINT` (a certificate in your Windows certificate store) or `SIGN_PFX` plus `SIGN_PFX_PASSWORD` (a certificate file kept outside this folder) before building. The build signs and timestamps the exe (`SIGN_TIMESTAMP_URL`, default DigiCert's) and stops with an error if signing fails. Without them it builds unsigned, as before. Never commit a certificate or its password.
+- `node tools/release.mjs` adds the SHA-256 checksums of the three release files, and a `Get-FileHash` line to check them, to the release notes.
 - To publish an update: raise `version` in package.json, then run `node tools/release.mjs "what changed"`. Needs the GitHub CLI signed in; releases go to the repo in `updates.github` in package.json. Installed copies offer the update within a few hours or on their next start.
 
 ## Files

@@ -3,6 +3,7 @@
 // Needs the GitHub CLI (gh) signed in, and package.json "updates.github" set to "owner/repo" (a public repo).
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -18,5 +19,19 @@ catch (e) { if (e.message.includes('already released')) throw e; }
 
 execFileSync(process.execPath, [path.join(ROOT, 'tools', 'build.mjs')], { stdio: 'inherit', env: { ...process.env, NOTES: notes } });
 const dist = (f) => path.join(ROOT, 'dist', f);
-execFileSync('gh', ['release', 'create', tag, dist('Optionwise.exe'), dist('app-bundle.json'), dist('version.json'), '--repo', repo, '--title', `Optionwise ${pkg.version}`, '--notes', notes], { stdio: 'inherit' });
+const assets = ['Optionwise.exe', 'app-bundle.json', 'version.json'];
+// Hashes of the files exactly as uploaded (after signing), so anyone can check a download.
+const sums = assets.map((f) => `${crypto.createHash('sha256').update(fs.readFileSync(dist(f))).digest('hex')}  ${f}`);
+const signed = JSON.parse(fs.readFileSync(dist('version.json'), 'utf8')).signed;
+const fence = '```';
+const body = [
+  notes, '',
+  '### Checksums (SHA-256)', fence, ...sums, fence,
+  'To check a download, run this in PowerShell in the folder you saved it to. The Hash it prints should match the line above (upper or lower case does not matter):',
+  fence + 'powershell', 'Get-FileHash .\\Optionwise.exe -Algorithm SHA256', fence,
+  signed ? 'Optionwise.exe is Authenticode-signed: right-click it, Properties, Digital Signatures shows who signed it.'
+    : 'Optionwise.exe is not code-signed, so Windows SmartScreen may warn the first time you run it.',
+].join('\n');
+console.log('\n' + sums.join('\n'));
+execFileSync('gh', ['release', 'create', tag, ...assets.map(dist), '--repo', repo, '--title', `Optionwise ${pkg.version}`, '--notes', body], { stdio: 'inherit' });
 console.log(`\nReleased ${tag}. Running copies will offer the update within a few hours, or on their next start.`);
