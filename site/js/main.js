@@ -32,11 +32,11 @@ function wireCta(root) {
   const share = root.querySelector('[data-share]');
   if (share && navigator.share) {
     share.hidden = false;
-    share.addEventListener('click', () => navigator.share({ title: 'Optionwise', text: 'Practise NSE index options with no real money. Open on a Windows laptop.', url: SITE_URL }).catch(() => {}));
+    share.addEventListener('click', () => navigator.share({ title: 'Optionwise', text: 'Practice NSE index options with no real money. Open on a Windows laptop.', url: SITE_URL }).catch(() => {}));
   }
   const mail = root.querySelector('[data-mail]');
   if (mail) {
-    const body = `Try Optionwise on my laptop: ${SITE_URL}\n\nFree Windows app for practising NSE index options with no real money.`;
+    const body = `Try Optionwise on my laptop: ${SITE_URL}\n\nFree Windows app for practicing NSE index options with no real money.`;
     mail.href = `mailto:?subject=${encodeURIComponent('Optionwise: open on my laptop')}&body=${encodeURIComponent(body)}`;
   }
   const copy = root.querySelector('[data-copylink]');

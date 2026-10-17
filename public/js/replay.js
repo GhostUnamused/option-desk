@@ -1,4 +1,4 @@
-// Replay: practise on real past NSE days. A control bar under the tabs moves the replay clock (a few minutes in a
+// Replay: practice on real past NSE days. A control bar under the tabs moves the replay clock (a few minutes in a
 // minute-by-minute session, a day, a week, to the next expiry, or auto-play), and the Replay tab holds session setup,
 // the trade journal, the end-of-session summary, history downloads and settings. The server disguises dates in blind
 // mode, so this file never has to.
@@ -153,7 +153,7 @@ async function renderTab() {
 }
 
 function intro() {
-  return el('p', { class: 'intro' }, el('b', { text: 'Practise on real past days.' }), ' Pick a day in history and trade at the close, or turn on minute by minute replay to watch a session unfold. Play moves one market minute at a time and pauses at the close; larger jumps are tucked under Jump ahead. Your replay balance is separate from the live paper account.');
+  return el('p', { class: 'intro' }, el('b', { text: 'Practice on real past days.' }), ' Pick a day in history and trade at the close, or turn on minute by minute replay to watch a session unfold. Play moves one market minute at a time and pauses at the close; larger jumps are tucked under Jump ahead. Your replay balance is separate from the live paper account.');
 }
 
 const stat = (k, v, cls, s) => el('div', { class: 'stat' }, el('div', { class: 'k' }, term(k)), el('div', { class: 'v ' + (cls || ''), text: v }), s ? el('div', { class: 's', text: s }) : null);

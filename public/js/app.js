@@ -39,7 +39,7 @@ function guide() {
   const g = el('section', { class: 'guide', id: 'guide', 'aria-labelledby': 'guideTitle' },
     el('div', { class: 'panel-h', style: { marginBottom: '0' } },
       el('div', {}, el('h2', { id: 'guideTitle', text: 'New to options? Start here' }),
-        el('p', { class: 'note', style: { marginTop: '4px' }, text: 'Everything in Optionwise uses pretend money, so you can practise freely without risking a rupee.' })),
+        el('p', { class: 'note', style: { marginTop: '4px' }, text: 'Everything in Optionwise uses pretend money, so you can practice freely without risking a rupee.' })),
       el('span', { class: 'sp' }),
       el('button', { class: 'btn ghost sm', type: 'button', text: 'Hide guide', onclick: () => { g.hidden = true; store.set('guideHidden', true); } })),
     el('ol', { class: 'steps' },
@@ -189,11 +189,11 @@ function initDesktop() {
   const mode = $('#modeBtn');
   mode.hidden = false;
   mode.textContent = S.meta.mock ? 'Switch to live prices' : 'Switch to replay';
-  mode.title = S.meta.mock ? 'Use real NSE prices and your main paper account' : 'Practise on real past days, one day at a time (works when the market is closed), with a separate replay balance';
+  mode.title = S.meta.mock ? 'Use real NSE prices and your main paper account' : 'Practice on real past days, one day at a time (works when the market is closed), with a separate replay balance';
   mode.addEventListener('click', async () => {
     const toSim = !S.meta.mock;
     const msg = toSim
-      ? 'Switch to replay? You practise on real past days at their closing prices, with a separate replay balance. Optionwise restarts in a few seconds.'
+      ? 'Switch to replay? You practice on real past days at their closing prices, with a separate replay balance. Optionwise restarts in a few seconds.'
       : 'Switch back to live NSE prices? Your replay session is kept for next time. Optionwise restarts in a few seconds.';
     if (!confirm(msg)) return;
     replay.stopPlay();

@@ -12,7 +12,7 @@ Windows app, free for noncommercial use. Latest version and download: see [Relea
 
 - The first time, Windows SmartScreen may say "Windows protected your PC" if the release you downloaded is not code-signed. Check the download first (see **Verify your download** below), then click **More info**, then **Run anyway**.
 - When a new version is out, an **Update to …** badge appears at the top. Click it; the app downloads, restarts and shows "Updated to …". Your paper account is kept.
-- **Switch to replay / Switch to live prices** (next to the data badge) restarts the app in replay mode (real past market days, see below) or back on live NSE prices. Use replay to practise when the market is closed.
+- **Switch to replay / Switch to live prices** (next to the data badge) restarts the app in replay mode (real past market days, see below) or back on live NSE prices. Use replay to practice when the market is closed.
 
 ### Verify your download
 
@@ -39,9 +39,9 @@ The `Hash` it prints must match the `Optionwise.exe` line on the release page (u
 
 Also: India VIX (the market's "fear gauge") in the header, a **Beginner guide** button, and dotted-underlined words that explain themselves when you hover or tap them.
 
-## Replay: practise on real past days
+## Replay: practice on real past days
 
-Replay mode replaces live prices with NSE's own end-of-day records, so you can practise any time, including when the market is closed.
+Replay mode replaces live prices with NSE's own end-of-day records, so you can practice any time, including when the market is closed.
 
 1. **Download history** in the Replay tab: pick a date range (three to six months is a good start). The app fetches NSE's daily F&O bhavcopy (the old format before July 2024 and the current UDiFF one), the NIFTY 50 and NIFTY BANK closes and India VIX, keeps NIFTY and BANK NIFTY options, and stores them on your computer in `replay.db`. About 1 MB to download per trading day; nothing is bundled in the app.
 2. **Start a session** on a day of your choice, or a random day. Tick **Blind mode** to hide the real date until you finish: dates are shifted to a made-up year, while weekdays and days to expiry stay true.

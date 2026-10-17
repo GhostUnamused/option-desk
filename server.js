@@ -27,7 +27,7 @@ import { LiveOptionHistory } from './lib/opthist.js';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const portArg = process.argv.indexOf('--port');
 const PORT = Number(portArg > 0 ? process.argv[portArg + 1] : process.env.PORT) || 4321;
-// "Simulated" mode is the replay: practise on real past days, stepped forward one trading day at a time.
+// "Simulated" mode is the replay: practice on real past days, stepped forward one trading day at a time.
 const MOCK = process.env.MOCK === '1' || process.argv.includes('--sim') || process.argv.includes('--replay');
 desktop.migrateData();
 loadDotEnv(path.join(ROOT, '.env')); // source runs only: optional developer credentials; end users connect in the app

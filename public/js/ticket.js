@@ -57,7 +57,7 @@ function render() {
     body.append(el('div', { class: 'note', text: `${legs.length} legs, placed together at the live quotes.` }));
   }
   body.append(el('label', { class: 'f', for: 'tkNote' }, 'Journal entry (required)',
-    el('textarea', { class: 'inp note-in', id: 'tkNote', rows: '2', minlength: '1', maxlength: '1000', 'aria-required': 'true', placeholder: S.meta.replay ? 'What do you expect the index or volatility to do?' : 'Why are you taking this trade? What are you practising?', oninput: (e) => { note = e.target.value; syncPlaceButton(); } }, note),
+    el('textarea', { class: 'inp note-in', id: 'tkNote', rows: '2', minlength: '1', maxlength: '1000', 'aria-required': 'true', placeholder: S.meta.replay ? 'What do you expect the index or volatility to do?' : 'Why are you taking this trade? What are you practicing?', oninput: (e) => { note = e.target.value; syncPlaceButton(); } }, note),
     el('span', { class: 'note', text: 'Enter at least one non-space character. Your entry is saved with the order.' })));
   if (S.meta.replay) body.append(
     el('label', { class: 'f', for: 'tkPlan' }, 'What would prove your idea wrong? (exit plan)',
