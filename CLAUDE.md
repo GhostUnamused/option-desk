@@ -52,6 +52,7 @@ Local NSE index-options workstation (also packaged as a self-updating Windows ap
 - Indian number formatting (`en-IN`, lakh/crore via `util.compact`), ₹ amounts, IST times.
 - Colors only via CSS tokens in `public/css/app.css` (single premium-black theme, TradingView-style). Gains `--up`, losses `--down`; No blue: `--accent` is a white/silver fill (black text on it), `--accent-text` for highlighted text. India VIX has its own header block (`renderVix` in app.js, bands in `util.vixMood`).
 - Paper trading only; never add real order placement.
+- FYERS/Upstox/Kotak/Breeze/Angel One are flagged `experimental` in `public/js/broker.js` until verified against a real account; remove the flag per provider once checked.
 
 ## Known gaps / next ideas
 - Market orders only (no limit/stop orders, no GTT).

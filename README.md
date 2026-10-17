@@ -1,10 +1,12 @@
 # Optionwise
 
-A practice desk for NSE index options. Learn how options are priced, watch live quotes and charts, read a broker-style option chain, build strategies, and trade them on a paper account with a dummy balance. No real money and no real orders, ever.
+**Source-available** (PolyForm Noncommercial) practice desk for NSE index options. Learn how options are priced, watch live quotes and charts, read a broker-style option chain, build strategies, and trade them on a paper account with a dummy balance. No real money and no real orders, ever.
 
-Current version: **0.8.0**
+Windows app, free for noncommercial use. Latest version and download: see [Releases](https://github.com/yaminichandrakj/optionwise/releases). Learning tool only, not investment advice.
 
 ## Start it
+
+**Platforms:** the packaged app (Optionwise.exe) is Windows only. On macOS or Linux, install Node.js 22.13 or newer and run `node server.js` (or `node server.js --sim`), then open http://localhost:4321. Source runs work on any system, but the `.bat` files are Windows-only, and outside Windows broker credentials are saved in a file readable only by your user, not encrypted with the Windows account.
 
 **As an app (Windows):** double-click **Optionwise.exe**. It opens in its own window and needs nothing else installed. Close the window and it quits by itself a few seconds later.
 
@@ -55,7 +57,7 @@ The replay balance (`replay.json`) is separate from the live paper account. Ever
 
 By default, prices come from the same public JSON endpoints nseindia.com uses in your browser. They are unofficial, so NSE can rate-limit or change them. Prices refresh every few seconds: close to live, not tick-by-tick.
 
-You can connect one provider for live market data from the Data button: INDstocks, FYERS, Upstox, Kotak Neo, ICICI Breeze or Angel One. The app uses your own credentials, stored locally and encrypted with your Windows account, and requests market data only. Kotak Neo uses one consumer key for quotes, option chains and active-contract candles; its index charts continue to use NSE's public endpoints. FYERS and Upstox access tokens expire daily. Breeze uses an App Key, Secret Key and daily API session; Angel One uses a SmartAPI key, client code, PIN and daily TOTP login. Provider coverage differs: BSE and stock options, expired options, streaming, and historical candle windows depend on the provider. Replay's minute-history downloader still uses INDstocks, while the daily NSE archive replay works without a broker connection.
+You can connect one provider for live market data from the Data button. **INDstocks is the most tested.** FYERS, Upstox, Kotak Neo, ICICI Breeze and Angel One are **experimental**: they are covered by tests against fake APIs but have not yet been checked against real accounts, and the app falls back to NSE data if they fail. Please report what you find. The providers are: INDstocks, FYERS, Upstox, Kotak Neo, ICICI Breeze or Angel One. The app uses your own credentials, stored locally and encrypted with your Windows account, and requests market data only. Kotak Neo uses one consumer key for quotes, option chains and active-contract candles; its index charts continue to use NSE's public endpoints. FYERS and Upstox access tokens expire daily. Breeze uses an App Key, Secret Key and daily API session; Angel One uses a SmartAPI key, client code, PIN and daily TOTP login. Provider coverage differs: BSE and stock options, expired options, streaming, and historical candle windows depend on the provider. Replay's minute-history downloader still uses INDstocks, while the daily NSE archive replay works without a broker connection.
 
 ## Settings
 

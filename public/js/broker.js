@@ -4,13 +4,14 @@ import { S } from './state.js';
 
 const PROVIDERS = [
   { id: 'indstocks', name: 'INDstocks', help: 'Paste the access token from your INDstocks API settings. It lasts 24 hours.', link: 'https://www.indstocks.com/app/api-trading/access-tokens' },
-  { id: 'fyers', name: 'FYERS', help: 'Paste your FYERS Client ID and today’s access token. FYERS tokens expire daily.', link: 'https://myapi.fyers.in/dashboard' },
-  { id: 'upstox', name: 'Upstox', help: 'Create a personal API app, generate today’s access token, and paste it here. Upstox tokens expire at 3:30 AM.', link: 'https://account.upstox.com/developer/apps' },
-  { id: 'kotak', name: 'Kotak Neo', help: 'Create a Trade API app in Kotak Neo and paste its consumer key. Market-data requests use this single key; no TOTP or MPIN is needed.', link: 'https://kotakneo.com/platform/trade-api' },
-  { id: 'breeze', name: 'ICICI Breeze', help: 'Enter your App Key and Secret Key, then paste today’s API_Session value from the login redirect. The session expires daily.', link: 'https://api.icicidirect.com/' },
-  { id: 'angelone', name: 'Angel One', help: 'Enter your SmartAPI key, client code, trading PIN, and current six-digit TOTP. SmartAPI sessions expire at midnight.', link: 'https://smartapi.angelone.in/' },
+  { id: 'fyers', experimental: true, name: 'FYERS', help: 'Paste your FYERS Client ID and today’s access token. FYERS tokens expire daily.', link: 'https://myapi.fyers.in/dashboard' },
+  { id: 'upstox', experimental: true, name: 'Upstox', help: 'Create a personal API app, generate today’s access token, and paste it here. Upstox tokens expire at 3:30 AM.', link: 'https://account.upstox.com/developer/apps' },
+  { id: 'kotak', experimental: true, name: 'Kotak Neo', help: 'Create a Trade API app in Kotak Neo and paste its consumer key. Market-data requests use this single key; no TOTP or MPIN is needed.', link: 'https://kotakneo.com/platform/trade-api' },
+  { id: 'breeze', experimental: true, name: 'ICICI Breeze', help: 'Enter your App Key and Secret Key, then paste today’s API_Session value from the login redirect. The session expires daily.', link: 'https://api.icicidirect.com/' },
+  { id: 'angelone', experimental: true, name: 'Angel One', help: 'Enter your SmartAPI key, client code, trading PIN, and current six-digit TOTP. SmartAPI sessions expire at midnight.', link: 'https://smartapi.angelone.in/' },
 ];
 let dlg, st = null, busy = false;
+const EXPERIMENTAL_NOTE = 'Experimental: this connection has not been tested against a real account yet. If it fails, the app falls back to NSE data. Please report what you see on GitHub.';
 const selected = () => PROVIDERS.find((p) => p.id === st?.provider) || PROVIDERS[0];
 
 export function init() {
@@ -40,7 +41,7 @@ function render(error = '') {
   const picker = el('select', { class: 'inp tok', 'aria-label': 'Choose broker', onchange: async (e) => {
     try { update(await api('/api/broker/select', { provider: e.target.value })); render(); }
     catch (x) { toast(x.message, 'err'); }
-  } }, ...PROVIDERS.map((x) => el('option', { value: x.id, text: x.name, selected: x.id === st.provider })));
+  } }, ...PROVIDERS.map((x) => el('option', { value: x.id, text: x.name + (x.experimental ? ' (experimental)' : ''), selected: x.id === st.provider })));
   const clientId = p.id === 'fyers' ? el('input', { class: 'inp tok', type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'FYERS Client ID', 'aria-label': 'FYERS Client ID' }) : null;
   const breezeAppKey = p.id === 'breeze' ? el('input', { class: 'inp tok', type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'Breeze App Key', 'aria-label': 'Breeze App Key' }) : null;
   const breezeSecret = p.id === 'breeze' ? el('input', { class: 'inp tok', type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: 'Breeze Secret Key', 'aria-label': 'Breeze Secret Key' }) : null;
@@ -73,6 +74,7 @@ function render(error = '') {
     el('div', { class: 'tk-h' }, el('div', {}, el('h3', { text: 'Connect a broker' }), el('div', { class: 'note', text: 'Choose one broker for live market data. Trading stays paper-only.' })), close),
     el('div', { class: 'tk-b' }, status, picker,
       el('p', { text: p.help }),
+      p.experimental ? el('div', { class: 'warnbox', text: EXPERIMENTAL_NOTE }) : null,
       el('ol', { class: 'bk-steps' }, el('li', {}, 'Open ', el('a', { href: p.link, target: '_blank', rel: 'noopener', text: `${p.name} API settings` }), ' and sign in.'), el('li', { text: p.id === 'kotak' ? 'Create or open your Trade API app and copy its consumer key.' : p.id === 'breeze' ? 'Create a Breeze API app, sign in to its login page, then copy API_Session from the redirect URL.' : p.id === 'angelone' ? 'Create a SmartAPI app and generate a current TOTP in your authenticator.' : 'Create or open your personal API app and copy its current market-data token.' })),
       clientId, breezeAppKey, breezeSecret, angelApiKey, angelClientCode, angelPin, token, err,
       el('p', { class: 'note', text: 'Credentials stay on this computer (encrypted for your Windows account). Optionwise only requests market data; it never sends orders to your broker.' }),
