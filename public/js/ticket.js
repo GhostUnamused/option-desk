@@ -85,7 +85,7 @@ function preview() {
         await wait(350);
         try { pv = await api('/api/preview', { legs }); }
         catch (retryError) {
-          if (retryError instanceof TypeError) throw new Error('Option Desk stopped responding while fetching quotes. Reopen the app and try again.');
+          if (retryError instanceof TypeError) throw new Error('Optionwise stopped responding while fetching quotes. Reopen the app and try again.');
           throw retryError;
         }
       }

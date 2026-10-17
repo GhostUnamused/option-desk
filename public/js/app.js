@@ -39,7 +39,7 @@ function guide() {
   const g = el('section', { class: 'guide', id: 'guide', 'aria-labelledby': 'guideTitle' },
     el('div', { class: 'panel-h', style: { marginBottom: '0' } },
       el('div', {}, el('h2', { id: 'guideTitle', text: 'New to options? Start here' }),
-        el('p', { class: 'note', style: { marginTop: '4px' }, text: 'Everything in Option Desk uses pretend money, so you can practise freely without risking a rupee.' })),
+        el('p', { class: 'note', style: { marginTop: '4px' }, text: 'Everything in Optionwise uses pretend money, so you can practise freely without risking a rupee.' })),
       el('span', { class: 'sp' }),
       el('button', { class: 'btn ghost sm', type: 'button', text: 'Hide guide', onclick: () => { g.hidden = true; store.set('guideHidden', true); } })),
     el('ol', { class: 'steps' },
@@ -153,7 +153,7 @@ function renderAcctMini() {
   $('#acctMini').replaceChildren(el('span', { class: 'k', text: S.meta.replay ? 'Replay account' : 'Paper account' }), el('span', { class: 'v' }, el('span', { text: rs(a.available) + ' free · ' }), el('span', { class: tone(a.totalPnl), text: srs(a.totalPnl) })));
 }
 
-// Desktop app (OptionDesk.exe): version, live/simulated switch, updates, and telling the app when this window closes.
+// Desktop app (Optionwise.exe): version, live/simulated switch, updates, and telling the app when this window closes.
 // Full-screen "please wait" while the app downloads an update or restarts. Returns a function that removes it.
 function busy(title, detail) {
   const secs = el('span', { text: '0 s' });
@@ -171,7 +171,7 @@ async function waitForRestart(done, close) {
     try { if (done(await api('/api/meta'))) { location.reload(); return; } } catch {}
   }
   close();
-  toast('Option Desk did not come back. Open it again from its shortcut.', 'err');
+  toast('Optionwise did not come back. Open it again from its shortcut.', 'err');
 }
 
 // A newly opened window asks GitHub afresh (force); after that the server's 15-minute memory is enough.
@@ -184,7 +184,7 @@ async function checkUpdate(force = false) {
 
 function initDesktop() {
   const app = S.meta.app;
-  $('#appVer').textContent = `Option Desk ${app.version}. `;
+  $('#appVer').textContent = `Optionwise ${app.version}. `;
   if (!app.packaged) return;
   const mode = $('#modeBtn');
   mode.hidden = false;
@@ -193,18 +193,18 @@ function initDesktop() {
   mode.addEventListener('click', async () => {
     const toSim = !S.meta.mock;
     const msg = toSim
-      ? 'Switch to replay? You practise on real past days at their closing prices, with a separate replay balance. Option Desk restarts in a few seconds.'
-      : 'Switch back to live NSE prices? Your replay session is kept for next time. Option Desk restarts in a few seconds.';
+      ? 'Switch to replay? You practise on real past days at their closing prices, with a separate replay balance. Optionwise restarts in a few seconds.'
+      : 'Switch back to live NSE prices? Your replay session is kept for next time. Optionwise restarts in a few seconds.';
     if (!confirm(msg)) return;
     replay.stopPlay();
-    const close = busy(toSim ? 'Switching to replay' : 'Switching to live NSE prices', 'Option Desk is restarting. This page reloads by itself in a few seconds.');
+    const close = busy(toSim ? 'Switching to replay' : 'Switching to live NSE prices', 'Optionwise is restarting. This page reloads by itself in a few seconds.');
     await api('/api/restart', { sim: toSim }).catch(() => {});
     waitForRestart((m) => m.app.started !== app.started && m.mock === toSim, close);
   });
   $('#updPill').addEventListener('click', async () => {
     const big = $('#updPill').dataset.big === '1';
-    if (!confirm(`Install the update now? Option Desk downloads it (${big ? 'about 100 MB' : 'about 0.5 MB'}) and restarts. Your paper account is kept.`)) return;
-    const close = busy('Updating Option Desk', `Downloading ${big ? 'about 100 MB, which can take a minute or two' : 'a small update'}. Option Desk then restarts and this page reloads by itself. Keep this window open.`);
+    if (!confirm(`Install the update now? Optionwise downloads it (${big ? 'about 100 MB' : 'about 0.5 MB'}) and restarts. Your paper account is kept.`)) return;
+    const close = busy('Updating Optionwise', `Downloading ${big ? 'about 100 MB, which can take a minute or two' : 'a small update'}. Optionwise then restarts and this page reloads by itself. Keep this window open.`);
     try {
       const r = await api('/api/update', {});
       store.set('updatedTo', r.version);
@@ -212,7 +212,7 @@ function initDesktop() {
     } catch (e) { close(); toast(`Update failed: ${e.message}`, 'err'); }
   });
   const updated = store.get('updatedTo', null);
-  if (updated) { store.set('updatedTo', null); if (updated === app.version) toast(`Updated to Option Desk ${app.version}.`); }
+  if (updated) { store.set('updatedTo', null); if (updated === app.version) toast(`Updated to Optionwise ${app.version}.`); }
   if (app.updates) { checkUpdate(true); setInterval(() => checkUpdate(), 30 * 60e3); }
   const id = Math.random().toString(36).slice(2);
   // If the app underneath was updated or switched while this window stayed open, reload so the page matches it.
@@ -261,7 +261,7 @@ function every(ms, fn) {
 
 async function boot() {
   try { S.meta = await api('/api/meta'); }
-  catch (e) { document.querySelector('main').replaceChildren(el('div', { class: 'panel empty', text: 'Could not reach the Option Desk server. Open Option Desk again (or run "node server.js") and reload this page.' })); return; }
+  catch (e) { document.querySelector('main').replaceChildren(el('div', { class: 'panel empty', text: 'Could not reach the Optionwise server. Open Optionwise again (or run "node server.js") and reload this page.' })); return; }
   if (!S.meta.indices[S.symbol]) S.symbol = 'NIFTY';
   if (S.meta.replay) initReplay();
   ticket.init();

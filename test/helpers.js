@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ReplayStore } from '../lib/replay/store.js';
 import { bs } from '../public/js/bs.js';
 
-export function tempDir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'optiondesk-test-')); }
+export function tempDir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'optionwise-test-')); }
 
 // Trading days Mon 2024-07-01 .. Fri 2024-07-12 (10 days). NIFTY rises 100 points a day from 24,000.
 // Two expiries: 2024-07-04 (weekly) and 2024-07-11. Prices come from Black–Scholes at 15% vol, so implied vol

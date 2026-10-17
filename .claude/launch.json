@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "option-desk-sim",
+      "name": "optionwise-sim",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js", "--sim", "--port", "4322"],
       "port": 4322
     },
     {
-      "name": "option-desk-live",
+      "name": "optionwise-live",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js", "--port", "4323"],
       "port": 4323

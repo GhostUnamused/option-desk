@@ -1,4 +1,4 @@
-// Option Desk local server. Run: node server.js   (--sim or MOCK=1 for the replay market: real past NSE days). OptionDesk.exe runs this same file.
+// Optionwise local server. Run: node server.js   (--sim or MOCK=1 for the replay market: real past NSE days). Optionwise.exe runs this same file.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,7 +55,7 @@ async function metaIndices() {
   return out;
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
 
 function send(res, code, body) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -197,13 +197,13 @@ desktop.attach(server);
 // After a restart the previous copy may hold the port for a moment, so retry briefly.
 let tries = 0;
 server.on('error', (e) => {
-  if (e.code === 'EADDRINUSE' && process.env.OPTION_DESK_RESTART === '1' && ++tries < 40) return setTimeout(() => server.listen(PORT, '127.0.0.1'), 250);
+  if (e.code === 'EADDRINUSE' && desktop.env('RESTART') === '1' && ++tries < 40) return setTimeout(() => server.listen(PORT, '127.0.0.1'), 250);
   throw e;
 });
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n  Option Desk is running: http://localhost:${PORT}`);
+  console.log(`\n  Optionwise is running: http://localhost:${PORT}`);
   console.log(`  Data: ${MOCK ? 'replay of past NSE days' : 'live (INDstocks when connected, else NSE website)'} · Account: ${path.join(desktop.DATA_DIR, MOCK ? 'replay.json' : 'paper.json')}`);
-  if (desktop.PACKAGED && process.env.OPTION_DESK_RESTART !== '1' && !process.env.OPTION_DESK_NO_WINDOW) desktop.openWindow(`http://localhost:${PORT}`);
+  if (desktop.PACKAGED && desktop.env('RESTART') !== '1' && !desktop.env('NO_WINDOW')) desktop.openWindow(`http://localhost:${PORT}`);
   console.log('  Keep this window open. Press Ctrl+C to stop.\n');
   if (!MOCK) console.log(`  INDstocks: ${broker.token ? `token from ${broker.source === 'env' ? '.env' : 'the app (encrypted)'}` : 'no token yet, using NSE website data'}`);
   if (!MOCK) provider.indices().then(() => console.log(`  Connected to ${provider.name}.`)).catch((e) => console.log(`  Could not reach NSE yet: ${e.message}. The app will keep retrying.`));

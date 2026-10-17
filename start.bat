@@ -1,5 +1,5 @@
 @echo off
-title Option Desk
+title Optionwise
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (

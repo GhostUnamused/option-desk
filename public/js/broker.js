@@ -61,7 +61,7 @@ function render(error = '') {
     el('div', { class: 'tk-h' }, el('div', {}, el('h3', { text: 'Live prices from INDstocks' }), el('div', { class: 'note', text: 'Optional. Without it, prices come from NSE\'s public website.' })), close),
     el('div', { class: 'tk-b' },
       status,
-      el('p', { text: 'If you have an INDstocks (INDmoney) account, Option Desk can read live prices and the option chain through its official API. This is steadier than NSE\'s website. Option Desk only reads prices: all trading here stays paper trading.' }),
+      el('p', { text: 'If you have an INDstocks (INDmoney) account, Optionwise can read live prices and the option chain through its official API. This is steadier than NSE\'s website. Optionwise only reads prices: all trading here stays paper trading.' }),
       el('ol', { class: 'bk-steps' },
         el('li', {}, 'Open ', el('a', { href: s.tokenPage, target: '_blank', rel: 'noopener', text: 'INDstocks → API trading → Access tokens' }), ' and sign in.'),
         el('li', { text: 'Generate an access token and copy it.' }),

@@ -1,4 +1,4 @@
-// Rebrands the Node single executable in place: draws the Option Desk icon into node.exe's existing icon slots
+// Rebrands the Node single executable in place: draws the Optionwise icon into node.exe's existing icon slots
 // and replaces its version block (the name Explorer and Task Manager show). No npm packages: a small PE resource
 // walker, a rasterizer for the icon and a PNG encoder on top of zlib.
 import zlib from 'node:zlib';

@@ -1,12 +1,12 @@
-# Option Desk
+# Optionwise
 
 A practice desk for NSE index options. Learn how options are priced, watch live quotes and charts, read a broker-style option chain, build strategies, and trade them on a paper account with a dummy balance. No real money and no real orders, ever.
 
-Current version: **0.7.8**
+Current version: **0.8.0**
 
 ## Start it
 
-**As an app (Windows):** double-click **OptionDesk.exe**. It opens in its own window and needs nothing else installed. Close the window and it quits by itself a few seconds later.
+**As an app (Windows):** double-click **Optionwise.exe**. It opens in its own window and needs nothing else installed. Close the window and it quits by itself a few seconds later.
 
 - The first time, Windows SmartScreen may say "Windows protected your PC" because the app is not code-signed. Click **More info**, then **Run anyway**.
 - When a new version is out, an **Update to …** badge appears at the top. Click it; the app downloads, restarts and shows "Updated to …". Your paper account is kept.
@@ -49,7 +49,7 @@ The replay balance (`replay.json`) is separate from the live paper account. Ever
 - Every leg pays charges: ₹20 brokerage, STT on sell premium, exchange and SEBI fees, GST and stamp duty (a typical discount-broker schedule).
 - Selling options blocks an estimated margin: the worst expiry loss if the index moves ±9%, plus 2% exposure on unhedged short lots. Real broker margins (SPAN) differ.
 - Positions still open after 3:30 pm on expiry day settle at intrinsic value against the index close.
-- The account is saved in `%LOCALAPPDATA%\OptionDesk\data\paper.json` (replay keeps `replay.json` and `replay.db` next to it). The app and `node server.js` share it.
+- The account is saved in `%LOCALAPPDATA%\Optionwise\data\paper.json` (replay keeps `replay.json` and `replay.db` next to it). The app and `node server.js` share it.
 
 ## Where the prices come from
 
@@ -63,7 +63,7 @@ Lot sizes, charges and the margin model are in `lib/config.js`. Lot sizes follow
 
 ## Building and releasing
 
-- `node tools/build.mjs` builds `dist/OptionDesk.exe` plus the release files, using the Node that runs it. No npm packages needed.
+- `node tools/build.mjs` builds `dist/Optionwise.exe` plus the release files, using the Node that runs it. No npm packages needed.
 - To publish an update: raise `version` in package.json, then run `node tools/release.mjs "what changed"`. Needs the GitHub CLI signed in; releases go to the repo in `updates.github` in package.json. Installed copies offer the update within a few hours or on their next start.
 
 ## Files
@@ -77,9 +77,16 @@ lib/config.js       indices, lot sizes, charges, margin model
 lib/desktop.js      data folder, updates, restart and quit for the app
 public/             the app itself (HTML, CSS, JavaScript, icons)
 public/vendor/      TradingView Lightweight Charts 4.2.0 (Apache 2.0)
+public/fonts/       Inter and Plus Jakarta Sans, bundled (SIL OFL 1.1)
 tools/              exe build, launcher and release scripts
 start*.bat          run from source on Windows
 test/               unit tests (npm test)
 ```
+
+## Licence
+
+Optionwise is **source-available** under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may read the code, run it, learn from it and change it for personal study, research, hobby and other noncommercial use. You may not sell it, bundle it into a paid product, or offer it as a paid or commercial service without the author's written permission. Charts use TradingView Lightweight Charts (Apache 2.0); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Your INDstocks token, if you add one, is saved encrypted on your own computer and is used only to talk to INDstocks. Optionwise is an independent project and is not affiliated with or endorsed by NSE, INDstocks (INDmoney) or TradingView. Market data belongs to its owners and is subject to their terms. The software is provided as is, with no warranty.
 
 This is a learning and practice tool. It is not investment advice.

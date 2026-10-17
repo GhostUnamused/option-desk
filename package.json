@@ -1,7 +1,8 @@
 {
-  "name": "option-desk",
-  "version": "0.7.9",
+  "name": "optionwise",
+  "version": "0.8.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "description": "Local NSE index options desk: live chains, charts, strategy builder, paper trading and a historical replay.",
   "scripts": {
@@ -15,6 +16,6 @@
     "node": ">=22.13"
   },
   "updates": {
-    "github": "GhostUnamused/option-desk"
+    "github": "GhostUnamused/optionwise"
   }
 }

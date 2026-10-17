@@ -1,4 +1,4 @@
-// Builds dist/OptionDesk.exe (Node single executable, no console window) plus the files a GitHub Release needs:
+// Builds dist/Optionwise.exe (Node single executable, no console window) plus the files a GitHub Release needs:
 //   app-bundle.json  every app file, base64, for the in-app updater
 //   version.json     latest version, launcher version and checksums
 // Run: node tools/build.mjs   (uses the Node that runs it; no npm packages needed)
@@ -32,7 +32,7 @@ const bundle = Buffer.from(JSON.stringify({ version: pkg.version, id, files }));
 fs.writeFileSync(path.join(DIST, 'app-bundle.json'), bundle);
 console.log(`app-bundle.json  ${Object.keys(files).length} files, ${(bundle.length / 1024).toFixed(0)} KB`);
 
-const exe = path.join(DIST, 'OptionDesk.exe');
+const exe = path.join(DIST, 'Optionwise.exe');
 const config = path.join(DIST, 'sea-config.json');
 fs.writeFileSync(config, JSON.stringify({
   main: path.join(ROOT, 'tools', 'launcher.cjs'), output: exe,
@@ -49,13 +49,13 @@ const pe = buf.readUInt32LE(0x3c);
 if (buf.toString('latin1', pe, pe + 4) !== 'PE\0\0') throw new Error('Unexpected exe layout');
 buf.writeUInt16LE(2, pe + 24 + 68);
 // Own icon and name (otherwise Explorer and Task Manager show Node.js).
-rebrand(buf, { version: pkg.version, name: 'Option Desk', file: 'OptionDesk.exe', description: 'Option Desk', copyright: 'Paper trading only. Not investment advice.' });
+rebrand(buf, { version: pkg.version, name: 'Optionwise', file: 'Optionwise.exe', description: 'Optionwise', copyright: 'Paper trading only. Not investment advice.' });
 fs.writeFileSync(exe, buf);
-console.log(`OptionDesk.exe   ${(buf.length / 1048576).toFixed(0)} MB`);
+console.log(`Optionwise.exe   ${(buf.length / 1048576).toFixed(0)} MB`);
 
 fs.writeFileSync(path.join(DIST, 'version.json'), JSON.stringify({
   version: pkg.version, launcher, notes: process.env.NOTES || '',
   bundle: 'app-bundle.json', bundleSha256: sha256(bundle),
-  exe: 'OptionDesk.exe', exeSha256: sha256(buf),
+  exe: 'Optionwise.exe', exeSha256: sha256(buf),
 }, null, 2));
 console.log(`version.json     v${pkg.version}, launcher ${launcher}`);
